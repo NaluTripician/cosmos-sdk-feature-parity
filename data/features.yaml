@@ -1,0 +1,450 @@
+# Cosmos DB SDK Feature Parity Matrix
+# Last updated: 2026-04-15
+#
+# Status values:
+#   ga           - Generally Available
+#   preview      - In preview/beta  
+#   in_progress  - Being actively developed (add pr_url)
+#   planned      - Planned but not started
+#   not_started  - No known plans
+#   removed      - Previously available, removed
+#   n_a          - Not applicable to this SDK
+
+categories:
+  - name: "Data Plane Operations"
+    features:
+      - id: crud
+        name: "CRUD Operations"
+        description: "Create, Read, Replace, Delete items"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.0.0" }
+          python: { status: "ga", since: "4.0.0" }
+          go: { status: "ga", since: "0.1.0" }
+          rust: { status: "ga", since: "0.22.0" }
+
+      - id: patch_item
+        name: "Patch Item"
+        description: "Partial document updates via JSON Patch"
+        sdks:
+          dotnet: { status: "ga", since: "3.23.0" }
+          java: { status: "ga", since: "4.32.0" }
+          python: { status: "ga", since: "4.7.0" }
+          go: { status: "ga", since: "0.3.3" }
+          rust: { status: "removed", since: "0.31.0", notes: "Removed for API redesign; use Read/Modify/Replace with ETag concurrency" }
+
+      - id: transactional_batch
+        name: "Transactional Batch"
+        description: "Execute multiple operations atomically within the same partition key"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.7.0" }
+          python: { status: "ga", since: "4.3.0" }
+          go: { status: "ga", since: "0.3.1" }
+          rust: { status: "ga", since: "0.31.0" }
+
+      - id: bulk_operations
+        name: "Bulk Operations"
+        description: "High-throughput bulk insert/upsert/delete with automatic batching"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.9.0" }
+          python: { status: "ga", since: "4.5.0" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: read_many
+        name: "ReadMany / ReadItems"
+        description: "Read multiple items by ID+PK in a single request across partitions"
+        sdks:
+          dotnet: { status: "ga", since: "3.25.0" }
+          java: { status: "ga", since: "4.32.0" }
+          python: { status: "ga", since: "4.14.0b3", notes: "read_items API" }
+          go: { status: "preview", since: "1.5.0-beta.2" }
+          rust: { status: "not_started" }
+
+      - id: stored_procedures
+        name: "Stored Procedures / Triggers / UDFs"
+        description: "Server-side JavaScript execution"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.0.0" }
+          python: { status: "ga", since: "4.0.0" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+  - name: "Query"
+    features:
+      - id: query_single_partition
+        name: "Single-Partition Query"
+        description: "SQL queries scoped to a single partition key"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.0.0" }
+          python: { status: "ga", since: "4.0.0" }
+          go: { status: "ga", since: "0.3.0" }
+          rust: { status: "ga", since: "0.22.0" }
+
+      - id: query_cross_partition
+        name: "Cross-Partition Query"
+        description: "SQL queries spanning multiple partitions"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.0.0" }
+          python: { status: "ga", since: "4.0.0" }
+          go: { status: "ga", since: "1.3.0", notes: "Limited to gateway-served queries; full support via client engine in beta" }
+          rust: { status: "ga", since: "0.24.0", notes: "Limited to gateway-served; preview_query_engine feature flag for full support" }
+
+      - id: linq_query
+        name: "LINQ Query Support"
+        description: "Language-Integrated Query for .NET"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "n_a" }
+          python: { status: "n_a" }
+          go: { status: "n_a" }
+          rust: { status: "n_a" }
+
+      - id: client_side_query_engine
+        name: "Client-Side Query Engine"
+        description: "Native client-side query execution for complex cross-partition queries"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0", notes: "Native ServiceInterop" }
+          java: { status: "ga", since: "4.0.0", notes: "Native query pipeline" }
+          python: { status: "not_started" }
+          go: { status: "preview", since: "1.5.0-beta.0", notes: "Via azure-cosmos-client-engine (Rust)" }
+          rust: { status: "preview", since: "0.24.0", notes: "Behind preview_query_engine feature flag" }
+
+      - id: query_advisor
+        name: "Query Advisor"
+        description: "Server-side query optimization recommendations"
+        sdks:
+          dotnet: { status: "ga", since: "3.52.0" }
+          java: { status: "ga", since: "4.79.0" }
+          python: { status: "preview", since: "4.16.0b1" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+  - name: "Indexing & Search"
+    features:
+      - id: vector_search_index
+        name: "Vector Search Indexing Policy"
+        description: "Configure vector embedding indexes on containers"
+        sdks:
+          dotnet: { status: "ga", since: "3.40.0" }
+          java: { status: "ga", since: "4.60.0" }
+          python: { status: "ga", since: "4.7.0" }
+          go: { status: "preview", since: "1.5.0-beta.1" }
+          rust: { status: "not_started" }
+
+      - id: full_text_search_index
+        name: "Full-Text Search Indexing Policy"
+        description: "Configure full-text indexes for BM25 scoring"
+        sdks:
+          dotnet: { status: "ga", since: "3.40.0" }
+          java: { status: "ga", since: "4.79.0" }
+          python: { status: "ga", since: "4.9.0" }
+          go: { status: "preview", since: "1.5.0-beta.1" }
+          rust: { status: "not_started" }
+
+      - id: hybrid_search
+        name: "Hybrid Search (Vector + FTS)"
+        description: "Combined vector similarity and full-text search queries"
+        sdks:
+          dotnet: { status: "ga", since: "3.47.0" }
+          java: { status: "ga", since: "4.63.0" }
+          python: { status: "ga", since: "4.9.0" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: semantic_reranking
+        name: "Semantic Reranking"
+        description: "AI-powered re-ranking of search results"
+        sdks:
+          dotnet: { status: "preview", since: "3.57.0-preview.0" }
+          java: { status: "not_started" }
+          python: { status: "preview", since: "4.14.0" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: float16_vector
+        name: "Float16 Vector Data Type"
+        description: "Half-precision floating point vectors for reduced storage"
+        sdks:
+          dotnet: { status: "ga", since: "3.54.0" }
+          java: { status: "ga", since: "4.70.0" }
+          python: { status: "not_started" }
+          go: { status: "preview", since: "1.5.0-beta.5" }
+          rust: { status: "not_started" }
+
+      - id: quantizer_type
+        name: "QuantizerType (Vector Index)"
+        description: "Product/spherical quantization for vector indexes"
+        sdks:
+          dotnet: { status: "preview", since: "3.59.0-preview.0" }
+          java: { status: "ga", since: "4.77.0" }
+          python: { status: "not_started" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: full_text_score_scope
+        name: "Full-Text Score Scope (BM25)"
+        description: "Control BM25 statistics scope (local vs global) in hybrid queries"
+        sdks:
+          dotnet: { status: "ga", since: "3.58.0" }
+          java: { status: "ga", since: "4.79.0" }
+          python: { status: "preview", since: "4.16.0b1" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+  - name: "Authentication"
+    features:
+      - id: key_auth
+        name: "Account Key Authentication"
+        description: "Authenticate with primary/secondary account keys"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.0.0" }
+          python: { status: "ga", since: "4.0.0" }
+          go: { status: "ga", since: "0.1.0" }
+          rust: { status: "ga", since: "0.22.0", notes: "Behind key_auth feature flag" }
+
+      - id: aad_auth
+        name: "Entra ID (AAD) Authentication"
+        description: "Token-based authentication with Microsoft Entra ID"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.0.0" }
+          python: { status: "ga", since: "4.0.0" }
+          go: { status: "ga", since: "0.3.0" }
+          rust: { status: "ga", since: "0.22.0" }
+
+      - id: connection_string
+        name: "Connection String Auth"
+        description: "Create client from a connection string"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.0.0" }
+          python: { status: "ga", since: "4.0.0" }
+          go: { status: "ga", since: "0.3.2" }
+          rust: { status: "ga", since: "0.24.0" }
+
+  - name: "Availability & Resiliency"
+    features:
+      - id: preferred_regions
+        name: "Preferred Regions / Multi-Region Reads"
+        description: "Configure preferred read regions for latency optimization"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.0.0" }
+          python: { status: "ga", since: "4.0.0" }
+          go: { status: "ga", since: "1.0.0" }
+          rust: { status: "ga", since: "0.31.0" }
+
+      - id: multi_region_writes
+        name: "Multi-Region Writes"
+        description: "Write to multiple regions simultaneously"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.0.0" }
+          python: { status: "ga", since: "4.0.0" }
+          go: { status: "ga", since: "1.4.1" }
+          rust: { status: "ga", since: "0.31.0", notes: "Basic support" }
+
+      - id: cross_region_hedging
+        name: "Cross-Region Hedging / Availability Strategy"
+        description: "Parallel speculative requests to secondary regions for lower latency"
+        sdks:
+          dotnet: { status: "ga", since: "3.47.0" }
+          java: { status: "ga", since: "4.63.0" }
+          python: { status: "ga", since: "4.15.0" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: ppaf
+        name: "Per-Partition Automatic Failover (PPAF)"
+        description: "Automatic failover at individual partition level"
+        sdks:
+          dotnet: { status: "ga", since: "3.50.0" }
+          java: { status: "ga", since: "4.63.0" }
+          python: { status: "ga", since: "4.15.0" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: per_partition_circuit_breaker
+        name: "Per-Partition Circuit Breaker"
+        description: "Circuit breaker pattern at partition level to avoid unhealthy replicas"
+        sdks:
+          dotnet: { status: "ga", since: "3.50.0" }
+          java: { status: "ga", since: "4.63.0" }
+          python: { status: "preview", since: "4.13.0b1" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: n_region_sync_commit
+        name: "N-Region Synchronous Commit"
+        description: "Synchronous replication to N regions before acknowledging writes"
+        sdks:
+          dotnet: { status: "ga", since: "3.58.0" }
+          java: { status: "ga", since: "4.79.0" }
+          python: { status: "not_started" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: excluded_regions
+        name: "Excluded Regions"
+        description: "Exclude specific regions from routing at client or request level"
+        sdks:
+          dotnet: { status: "ga", since: "3.35.0" }
+          java: { status: "ga", since: "4.50.0" }
+          python: { status: "ga", since: "4.12.0" }
+          go: { status: "not_started" }
+          rust: { status: "ga", since: "0.31.0" }
+
+  - name: "Change Feed"
+    features:
+      - id: change_feed_pull
+        name: "Change Feed (Pull Model)"
+        description: "Pull-based change feed iteration with feed ranges"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.0.0" }
+          python: { status: "ga", since: "4.0.0" }
+          go: { status: "preview", since: "1.5.0-beta.1" }
+          rust: { status: "not_started" }
+
+      - id: change_feed_processor
+        name: "Change Feed Processor"
+        description: "Managed, distributed change feed processing with leases"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.6.0" }
+          python: { status: "ga", since: "4.0.0" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: feed_ranges
+        name: "Feed Ranges"
+        description: "Logical partition range abstraction for parallel processing"
+        sdks:
+          dotnet: { status: "ga", since: "3.15.0" }
+          java: { status: "ga", since: "4.15.0" }
+          python: { status: "ga", since: "4.14.0b2" }
+          go: { status: "preview", since: "1.5.0-beta.1" }
+          rust: { status: "not_started" }
+
+  - name: "Advanced Features"
+    features:
+      - id: hierarchical_partition_keys
+        name: "Hierarchical Partition Keys"
+        description: "Multi-level partition key definitions"
+        sdks:
+          dotnet: { status: "ga", since: "3.33.0" }
+          java: { status: "ga", since: "4.46.0" }
+          python: { status: "ga", since: "4.6.0" }
+          go: { status: "ga", since: "1.2.0" }
+          rust: { status: "not_started" }
+
+      - id: throughput_control
+        name: "Throughput Control"
+        description: "Client-side RU/s rate limiting per operation group"
+        sdks:
+          dotnet: { status: "ga", since: "3.27.0" }
+          java: { status: "ga", since: "4.30.0" }
+          python: { status: "not_started" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: throughput_buckets
+        name: "Throughput Buckets"
+        description: "Server-side throughput control buckets"
+        sdks:
+          dotnet: { status: "ga", since: "3.50.0" }
+          java: { status: "ga", since: "4.74.0" }
+          python: { status: "not_started" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: priority_throttling
+        name: "Priority-Based Throttling"
+        description: "Set request priority for throttling decisions"
+        sdks:
+          dotnet: { status: "ga", since: "3.33.0" }
+          java: { status: "ga", since: "4.40.0" }
+          python: { status: "ga", since: "4.14.2" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: integrated_cache
+        name: "Integrated Cache Support"
+        description: "MaxIntegratedCacheStaleness and BypassIntegratedCache options"
+        sdks:
+          dotnet: { status: "ga", since: "3.25.0" }
+          java: { status: "ga", since: "4.25.0" }
+          python: { status: "ga", since: "4.5.0" }
+          go: { status: "ga", since: "1.1.0" }
+          rust: { status: "not_started" }
+
+  - name: "Observability"
+    features:
+      - id: opentelemetry
+        name: "OpenTelemetry Tracing"
+        description: "Distributed tracing with OpenTelemetry spans"
+        sdks:
+          dotnet: { status: "ga", since: "3.33.0" }
+          java: { status: "ga", since: "4.40.0" }
+          python: { status: "ga", since: "4.12.0" }
+          go: { status: "ga", since: "1.1.0" }
+          rust: { status: "not_started" }
+
+      - id: diagnostics
+        name: "Diagnostics / Structured Logging"
+        description: "Detailed request-level diagnostics and structured logging"
+        sdks:
+          dotnet: { status: "ga", since: "3.0.0" }
+          java: { status: "ga", since: "4.0.0" }
+          python: { status: "ga", since: "4.12.0" }
+          go: { status: "ga", since: "1.0.0" }
+          rust: { status: "not_started" }
+
+  - name: "Preview / Emerging"
+    features:
+      - id: thin_client
+        name: "Thin Client (Gateway V2)"
+        description: "Lightweight client routing through Gateway V2 proxy"
+        sdks:
+          dotnet: { status: "preview", since: "3.57.0" }
+          java: { status: "preview", since: "4.65.0" }
+          python: { status: "not_started" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: fault_injection
+        name: "Fault Injection"
+        description: "Simulate failures for resilience testing"
+        sdks:
+          dotnet: { status: "ga", since: "3.40.0" }
+          java: { status: "ga", since: "4.50.0" }
+          python: { status: "not_started" }
+          go: { status: "not_started" }
+          rust: { status: "preview", since: "0.31.0", notes: "Behind fault_injection feature flag" }
+
+      - id: read_consistency_strategy
+        name: "Read Consistency Strategy"
+        description: "Per-request read consistency control"
+        sdks:
+          dotnet: { status: "preview", since: "3.59.0-preview.0" }
+          java: { status: "ga", since: "4.71.0" }
+          python: { status: "not_started" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
+
+      - id: write_retries
+        name: "Automatic Write Retries"
+        description: "Automatic retries for idempotent write operations"
+        sdks:
+          dotnet: { status: "ga", since: "3.35.0" }
+          java: { status: "ga", since: "4.30.0" }
+          python: { status: "preview", since: "4.14.0b1" }
+          go: { status: "not_started" }
+          rust: { status: "not_started" }
