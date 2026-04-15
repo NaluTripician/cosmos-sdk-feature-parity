@@ -344,6 +344,8 @@ categories:
           python: { status: "ga", since: "4.6.0" }
           go: { status: "ga", since: "1.2.0" }
           rust: { status: "ga", since: "0.22.0", notes: "Multi-level tuples up to 3 levels; MultiHash partition keys" }
+
+      - id: throughput_control
         name: "Throughput Control"
         description: "Client-side RU/s rate limiting per operation group"
         sdks:
@@ -372,6 +374,8 @@ categories:
           python: { status: "ga", since: "4.14.2" }
           go: { status: "not_started" }
           rust: { status: "ga", since: "0.30.0", notes: "PriorityLevel enum: High/Low" }
+
+      - id: integrated_cache
         name: "Integrated Cache Support"
         description: "MaxIntegratedCacheStaleness and BypassIntegratedCache options"
         sdks:
@@ -379,7 +383,7 @@ categories:
           java: { status: "ga", since: "4.25.0" }
           python: { status: "ga", since: "4.5.0" }
           go: { status: "ga", since: "1.1.0" }
-          rust: { status: "not_started" }
+          rust: { status: "ga", since: "0.30.0", notes: "DedicatedGatewayOptions with staleness and bypass" }
 
   - name: "Observability"
     features:
