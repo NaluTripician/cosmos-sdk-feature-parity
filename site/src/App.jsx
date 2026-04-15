@@ -17,9 +17,10 @@ export default function App() {
   useEffect(() => {
     async function loadData() {
       try {
+        const base = import.meta.env.BASE_URL
         const [featuresResp, sdksResp] = await Promise.all([
-          fetch('/data/features.yaml'),
-          fetch('/data/sdks.yaml'),
+          fetch(`${base}data/features.yaml`),
+          fetch(`${base}data/sdks.yaml`),
         ])
         const featuresText = await featuresResp.text()
         const sdksText = await sdksResp.text()
@@ -28,7 +29,7 @@ export default function App() {
 
         // Try to load scrape data (may not exist yet)
         try {
-          const scrapeResp = await fetch('/data/scraped/latest.json')
+          const scrapeResp = await fetch(`${base}data/scraped/latest.json`)
           if (scrapeResp.ok) {
             setScrapeData(await scrapeResp.json())
           }

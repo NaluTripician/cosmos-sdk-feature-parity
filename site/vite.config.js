@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
-  // Copy data files to the build output so the dashboard can fetch them
+  base: '/cosmos-sdk-feature-parity/',
   publicDir: 'public',
   build: {
     outDir: 'dist',
