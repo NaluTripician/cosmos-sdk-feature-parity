@@ -1,0 +1,55 @@
+sdks:
+  dotnet:
+    name: ".NET"
+    repo: "Azure/azure-cosmos-dotnet-v3"
+    changelog_path: "changelog.md"
+    package: "Microsoft.Azure.Cosmos"
+    nuget_url: "https://www.nuget.org/packages/Microsoft.Azure.Cosmos"
+    latest_stable: "3.58.0"
+    latest_preview: "3.59.0-preview.0"
+    color: "#512BD4"
+    icon: "dotnet"
+
+  java:
+    name: "Java"
+    repo: "Azure/azure-sdk-for-java"
+    changelog_path: "sdk/cosmos/azure-cosmos/CHANGELOG.md"
+    package: "azure-cosmos"
+    maven_url: "https://central.sonatype.com/artifact/com.azure/azure-cosmos"
+    latest_stable: "4.79.1"
+    latest_preview: "4.80.0-beta.1"
+    color: "#ED8B00"
+    icon: "java"
+
+  python:
+    name: "Python"
+    repo: "Azure/azure-sdk-for-python"
+    changelog_path: "sdk/cosmos/azure-cosmos/CHANGELOG.md"
+    package: "azure-cosmos"
+    pypi_url: "https://pypi.org/project/azure-cosmos/"
+    latest_stable: "4.15.0"
+    latest_preview: "4.16.0b2"
+    color: "#3776AB"
+    icon: "python"
+
+  go:
+    name: "Go"
+    repo: "Azure/azure-sdk-for-go"
+    changelog_path: "sdk/data/azcosmos/CHANGELOG.md"
+    package: "azcosmos"
+    pkg_url: "https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
+    latest_stable: "1.4.1"
+    latest_preview: "1.5.0-beta.5"
+    color: "#00ADD8"
+    icon: "go"
+
+  rust:
+    name: "Rust"
+    repo: "Azure/azure-sdk-for-rust"
+    changelog_path: "sdk/cosmos/azure_data_cosmos/CHANGELOG.md"
+    package: "azure_data_cosmos"
+    crates_url: "https://crates.io/crates/azure_data_cosmos"
+    latest_stable: "0.31.0"
+    latest_preview: "0.32.0"
+    color: "#DEA584"
+    icon: "rust"
