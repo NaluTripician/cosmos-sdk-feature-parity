@@ -1,5 +1,5 @@
 # Cosmos DB SDK Feature Parity Matrix
-# Last updated: 2026-04-15
+# Last updated: 2026-04-15 (audited against source code)
 #
 # Status values:
 #   ga           - Generally Available
@@ -49,7 +49,7 @@ categories:
         sdks:
           dotnet: { status: "ga", since: "3.0.0" }
           java: { status: "ga", since: "4.9.0" }
-          python: { status: "ga", since: "4.5.0" }
+          python: { status: "not_started", notes: "No dedicated bulk API; use transactional batch or individual operations" }
           go: { status: "not_started" }
           rust: { status: "not_started" }
 
@@ -71,7 +71,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "ga", since: "0.25.0", notes: "StoredProcedureReference; pre/post triggers via ItemOptions" }
 
   - name: "Query"
     features:
@@ -135,7 +135,7 @@ categories:
           java: { status: "ga", since: "4.60.0" }
           python: { status: "ga", since: "4.7.0" }
           go: { status: "preview", since: "1.5.0-beta.1" }
-          rust: { status: "not_started" }
+          rust: { status: "ga", since: "0.28.0", notes: "VectorIndex with Flat/QuantizedFlat/DiskANN types" }
 
       - id: full_text_search_index
         name: "Full-Text Search Indexing Policy"
@@ -319,7 +319,7 @@ categories:
         sdks:
           dotnet: { status: "ga", since: "3.0.0" }
           java: { status: "ga", since: "4.6.0" }
-          python: { status: "ga", since: "4.0.0" }
+          python: { status: "not_started", notes: "Pull model only via query_items_change_feed(); no managed processor with leases" }
           go: { status: "not_started" }
           rust: { status: "not_started" }
 
@@ -343,9 +343,7 @@ categories:
           java: { status: "ga", since: "4.46.0" }
           python: { status: "ga", since: "4.6.0" }
           go: { status: "ga", since: "1.2.0" }
-          rust: { status: "not_started" }
-
-      - id: throughput_control
+          rust: { status: "ga", since: "0.22.0", notes: "Multi-level tuples up to 3 levels; MultiHash partition keys" }
         name: "Throughput Control"
         description: "Client-side RU/s rate limiting per operation group"
         sdks:
@@ -361,9 +359,9 @@ categories:
         sdks:
           dotnet: { status: "ga", since: "3.50.0" }
           java: { status: "ga", since: "4.74.0" }
-          python: { status: "not_started" }
+          python: { status: "ga", since: "4.14.0", notes: "throughput_bucket parameter on operations" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "ga", since: "0.30.0", notes: "throughput_bucket in request options" }
 
       - id: priority_throttling
         name: "Priority-Based Throttling"
@@ -373,9 +371,7 @@ categories:
           java: { status: "ga", since: "4.40.0" }
           python: { status: "ga", since: "4.14.2" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
-
-      - id: integrated_cache
+          rust: { status: "ga", since: "0.30.0", notes: "PriorityLevel enum: High/Low" }
         name: "Integrated Cache Support"
         description: "MaxIntegratedCacheStaleness and BypassIntegratedCache options"
         sdks:
@@ -405,7 +401,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.12.0" }
           go: { status: "ga", since: "1.0.0" }
-          rust: { status: "not_started" }
+          rust: { status: "ga", since: "0.29.0", notes: "Uses Rust tracing crate; structured logging and diagnostics thresholds" }
 
   - name: "Preview / Emerging"
     features:
@@ -425,7 +421,7 @@ categories:
         sdks:
           dotnet: { status: "ga", since: "3.40.0" }
           java: { status: "ga", since: "4.50.0" }
-          python: { status: "not_started" }
+          python: { status: "preview", notes: "FaultInjectionTransport test utility; not yet public API" }
           go: { status: "not_started" }
           rust: { status: "preview", since: "0.31.0", notes: "Behind fault_injection feature flag" }
 
@@ -445,6 +441,6 @@ categories:
         sdks:
           dotnet: { status: "ga", since: "3.35.0" }
           java: { status: "ga", since: "4.30.0" }
-          python: { status: "preview", since: "4.14.0b1" }
+          python: { status: "ga", since: "4.14.0b1", notes: "retry_write parameter on write operations" }
           go: { status: "not_started" }
           rust: { status: "not_started" }
