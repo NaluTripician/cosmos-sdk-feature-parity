@@ -1,0 +1,1326 @@
+# Cosmos DB SDK Retry Behavior Matrix
+# Last audited: 2026-04-16 (audited against SDK source code at HEAD)
+#
+# Status values:
+#   retries       - Scenario is retried by the SDK
+#   no_retry      - Scenario is explicitly observed but not retried
+#   n_a           - Not applicable (e.g., direct mode for a gateway-only SDK)
+#   not_started   - SDK does not handle this scenario yet (gap)
+#   unknown       - Behavior not visible in public source (e.g., closed-source direct transport)
+#
+# Each scenario has a per-SDK block keyed `direct` and `gateway`.
+# SDKs with no direct transport (Python, Go, Rust) report `direct: { status: n_a }`.
+#
+# Cross-SDK reference: sdks.yaml for SDK metadata.
+# Drift: scripts/scrape_retry_policies.py fetches the files below weekly and
+# alerts (retry_drift.md) when their SHA-256 hashes change, so curators can
+# re-audit.
+
+last_audited: "2026-04-16"
+
+sdks:
+  dotnet:
+    connection_modes: [direct, gateway]
+    repo: Azure/azure-cosmos-dotnet-v3
+    default_branch: master
+    central_dispatcher: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs"
+  java:
+    connection_modes: [direct, gateway]
+    repo: Azure/azure-sdk-for-java
+    default_branch: main
+    central_dispatcher: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java"
+  python:
+    connection_modes: [gateway]
+    repo: Azure/azure-sdk-for-python
+    default_branch: main
+    central_dispatcher: "sdk/cosmos/azure-cosmos/azure/cosmos/_retry_utility.py"
+  go:
+    connection_modes: [gateway]
+    repo: Azure/azure-sdk-for-go
+    default_branch: main
+    central_dispatcher: "sdk/data/azcosmos/cosmos_client_retry_policy.go"
+  rust:
+    connection_modes: [gateway]
+    repo: Azure/azure-sdk-for-rust
+    default_branch: main
+    central_dispatcher: "sdk/cosmos/azure_data_cosmos/src/handler/retry_handler.rs"
+
+# Pinned source files for drift detection. The scraper fetches each path from
+# the SDK's default branch and hashes its normalized content; any change
+# triggers a re-audit signal in retry_drift.md.
+audit_refs:
+  dotnet:
+    - "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs"
+    - "Microsoft.Azure.Cosmos/src/ResourceThrottleRetryPolicy.cs"
+    - "Microsoft.Azure.Cosmos/src/RetryOptions.cs"
+    - "Microsoft.Azure.Cosmos/src/WebExceptionRetryPolicy.cs"
+    - "Microsoft.Azure.Cosmos/src/Routing/InvalidPartitionExceptionRetryPolicy.cs"
+    - "Microsoft.Azure.Cosmos/src/Query/v2Query/PartitionKeyRangeGoneRetryPolicy.cs"
+  java:
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java"
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ResourceThrottleRetryPolicy.java"
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/directconnectivity/GoneAndRetryWithRetryPolicy.java"
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/SessionTokenMismatchRetryPolicy.java"
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/StaleResourceRetryPolicy.java"
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/PartitionKeyRangeGoneRetryPolicy.java"
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/WebExceptionRetryPolicy.java"
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/ThrottlingRetryOptions.java"
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/Configs.java"
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/http/HttpTimeoutPolicyDefault.java"
+  python:
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/_retry_utility.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/aio/_retry_utility_async.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/_retry_options.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/_resource_throttle_retry_policy.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/_endpoint_discovery_retry_policy.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/_session_retry_policy.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/_timeout_failover_retry_policy.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/_service_unavailable_retry_policy.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/_service_request_retry_policy.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/_service_response_retry_policy.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/_default_retry_policy.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/_gone_retry_policy.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/documents.py"
+  go:
+    - "sdk/data/azcosmos/cosmos_client_retry_policy.go"
+    - "sdk/data/azcosmos/cosmos_client.go"
+    - "sdk/data/azcosmos/cosmos_http_constants.go"
+    - "sdk/azcore/runtime/policy_retry.go"
+  rust:
+    - "sdk/cosmos/azure_data_cosmos/src/retry_policies/mod.rs"
+    - "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs"
+    - "sdk/cosmos/azure_data_cosmos/src/retry_policies/metadata_request_retry_policy.rs"
+    - "sdk/cosmos/azure_data_cosmos/src/retry_policies/resource_throttle_retry_policy.rs"
+    - "sdk/cosmos/azure_data_cosmos/src/handler/retry_handler.rs"
+    - "sdk/cosmos/azure_data_cosmos/src/constants.rs"
+
+# ---------------------------------------------------------------------------
+# Scenarios grouped by category. Each scenario lists per-SDK behavior. Cells
+# with connection_modes=[gateway] set direct: { status: n_a } per SDK.
+# ---------------------------------------------------------------------------
+categories:
+  - name: "HTTP status retries"
+    scenarios:
+      - id: throttled_429
+        name: "429 Throttled (RU exceeded)"
+        description: "Request rate exceeded (RU/s). Server sends 429 with x-ms-retry-after-ms hint."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: 9
+              wait_strategy: "server_retry_after; 5s fallback if 0"
+              total_wait_cap_s: 30
+              cross_region: "on_write_with_multi_write"
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ResourceThrottleRetryPolicy.cs#L17-L172"
+              notes: "ResourceThrottleRetryPolicy; stops when cumulative delay exceeds MaxRetryWaitTimeInSeconds (default 30). 429/3092 on multi-master writes is promoted to 503 and failed over cross-region."
+            gateway:
+              status: retries
+              max_retries: 9
+              wait_strategy: "server_retry_after; 5s fallback if 0"
+              total_wait_cap_s: 30
+              cross_region: "on_write_with_multi_write"
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ResourceThrottleRetryPolicy.cs#L17-L172"
+              notes: "Same ResourceThrottleRetryPolicy — mode agnostic."
+          java:
+            direct:
+              status: retries
+              max_retries: 9
+              wait_strategy: "server_retry_after; 100ms fallback (0ms for sub 3200)"
+              total_wait_cap_s: 30
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ResourceThrottleRetryPolicy.java#L64-L112"
+              notes: "Defaults from ThrottlingRetryOptions (9 attempts / 30s cap). disableRetryForThrottledBatchRequest opts batch writes out."
+            gateway:
+              status: retries
+              max_retries: 9
+              wait_strategy: "server_retry_after; 100ms fallback"
+              total_wait_cap_s: 30
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ResourceThrottleRetryPolicy.java#L64-L112"
+              notes: "Same policy; ThrottlingRetryOptions mode-agnostic."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 9
+              wait_strategy: "server_retry_after (x-ms-retry-after-ms); fixed fallback if configured"
+              total_wait_cap_s: 30
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_resource_throttle_retry_policy.py#L29-L60"
+              notes: "Dispatched at _retry_utility.py#L198-L199. Defaults 9 / 30s from _retry_options.py#L44-L46."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 3
+              wait_strategy: "azcore exponential w/ jitter (800ms→60s); Retry-After honored"
+              total_wait_cap_s: 60
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/azcore/runtime/policy_retry.go#L46-L55,L96-L205"
+              notes: "No Cosmos-level 429 branch — falls through to azcore default retry policy (default StatusCodes includes 429). Retry-After via shared.RetryAfter."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 5
+              wait_strategy: "fixed 5s per attempt (500ms × backoff_factor 10); NOT exponential despite docstring"
+              total_wait_cap_s: 200
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/resource_throttle_retry_policy.rs (+ client_retry_policy.rs#L126 ResourceThrottleRetryPolicy::new(5, 200, 10))"
+              notes: "GAP: x-ms-retry-after-ms NOT parsed (TODO comment). Base delay hardcoded to 500ms. Cumulative cap 200s."
+
+      - id: request_timeout_408
+        name: "408 Request Timeout"
+        description: "Server-side timeout processing the request."
+        sdks:
+          dotnet:
+            direct:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "no_wait"
+              total_wait_cap_s: null
+              cross_region: "read_only"
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L258-L266"
+              notes: "Client policy only marks endpoint unavailable (PPAF bookkeeping). Direct transport usually converts timeouts to 410 first (closed-source GoneAndRetryWithRetryPolicy handles those)."
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "no_wait"
+              total_wait_cap_s: null
+              cross_region: "read_only"
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L258-L266"
+              notes: "Same — 408 is not retried by client-side policy."
+          java:
+            direct:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: "conditional"
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L174-L190,L469-L494"
+              notes: "NO_RETRY by default. PPAF can force one cross-region retry. Non-idempotent transport 410s are surfaced here as 408."
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: "conditional"
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L174-L190,L469-L494"
+              notes: "Gateway HTTP read-timeout surfaced via GATEWAY_ENDPOINT_READ_TIMEOUT sub-status handled separately (#L323-L356) and CAN cross-region retry for reads/metadata/query plans."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: "len(applicable_read_regions)+1 (reads); request.retry_write (writes, default 0)"
+              wait_strategy: "fixed 500ms"
+              total_wait_cap_s: unknown
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_timeout_failover_retry_policy.py#L14-L60"
+              notes: "Dispatched at _retry_utility.py#L250-L255. Requires EnableEndpointDiscovery=True. Non-idempotent writes only retry if ConnectionPolicy.RetryNonIdempotentWrites > 0."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 3
+              wait_strategy: "azcore exponential w/ jitter"
+              total_wait_cap_s: 60
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/azcore/runtime/policy_retry.go#L46-L55"
+              notes: "Not in clientRetryPolicy.shouldRetryStatus; azcore default StatusCodes includes 408."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "1s between alternative-endpoint attempts (RETRY_INTERVAL_MS)"
+              total_wait_cap_s: unknown
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs (should_retry_on_http_status fall-through ~L521-L600 → should_retry_on_unavailable_endpoint_status_codes ~L459)"
+              notes: "Reads only. No dedicated 408 branch; generic read fallback via endpoint-failover. Writes NOT retried on 408."
+
+      - id: retry_with_449
+        name: "449 Retry With"
+        description: "Concurrent write conflict — server requests client retry with same payload."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: "unbounded by attempts; bounded by 30s budget"
+              wait_strategy: "exp 1s → 30s cap"
+              total_wait_cap_s: 30
+              cross_region: false
+              direct_only: true
+              source_ref: "Microsoft.Azure.Cosmos/src/RetryOptions.cs#L115-L236 (config); actual retry loop in closed-source Microsoft.Azure.Cosmos.Direct/GoneAndRetryWithRetryPolicy"
+              notes: "449/RetryWith handled by direct transport (closed source). Public repo exposes only tuning knobs."
+            gateway:
+              status: unknown
+              max_retries: unknown
+              wait_strategy: unknown
+              total_wait_cap_s: null
+              cross_region: false
+              direct_only: true
+              source_ref: "n/a"
+              notes: "449 is a direct-channel backend signal; gateway does not surface 449 to client."
+          java:
+            direct:
+              status: retries
+              max_retries: "unbounded; bounded by 30s budget"
+              wait_strategy: "exp backoff 10ms→1s cap + 5ms jitter"
+              total_wait_cap_s: 30
+              cross_region: false
+              direct_only: true
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/directconnectivity/GoneAndRetryWithRetryPolicy.java#L298-L373"
+              notes: "Nested RetryWithRetryPolicy inside GoneAndRetryWithRetryPolicy."
+            gateway:
+              status: n_a
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: true
+              source_ref: "n/a"
+              notes: "Gateway does not surface 449."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_retry_utility.py#L195-L258 + _default_retry_policy.py#L16-L44"
+              notes: "No explicit branch for 449; falls through to DefaultRetryPolicy which only retries CONNECTION_ERROR_CODES. 449 not retried."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "none"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go#L91-L97"
+              notes: "449 not referenced anywhere in sdk/data/azcosmos nor in azcore default StatusCodes. Surfaces as non-retriable ResponseError."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "none"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/mod.rs#L135-L160 (is_non_retryable_status_code); constants.rs (RETRY_WITH=449)"
+              notes: "GAP: 449 hard-coded as non-retryable — opposite of server semantics. Tracked by read_does_not_retry_non_retryable_status_codes test at client_retry_policy.rs#L1423."
+
+      - id: service_unavailable_503
+        name: "503 Service Unavailable"
+        description: "Backend replica unavailable or transient regional failure."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: 1
+              wait_strategy: "no_wait (TimeSpan.Zero)"
+              total_wait_cap_s: null
+              cross_region: true
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L25,L346-L350,L489-L543"
+              notes: "MaxServiceUnavailableRetryCount=1; retries only if PreferredLocationCount>1 AND (read OR multi-master write OR PPAF)."
+            gateway:
+              status: retries
+              max_retries: 1
+              wait_strategy: "no_wait"
+              total_wait_cap_s: null
+              cross_region: true
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L130-L139,L346-L350,L506-L543"
+              notes: "Gateway surfaces 503 from metadata/HTTP path; same ShouldRetryOnUnavailableEndpointStatusCodes handler."
+          java:
+            direct:
+              status: retries
+              max_retries: 1
+              wait_strategy: "immediate on second region"
+              total_wait_cap_s: 0
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L36,L156-L172,L392-L467"
+              notes: "MaxServiceUnavailableRetryCount=1. Writes retry only for webExceptionRetriable / server-generated / SDK-generated-410 503s unless nonIdempotentWriteRetriesEnabled=true."
+            gateway:
+              status: retries
+              max_retries: 1
+              wait_strategy: "immediate on second region"
+              total_wait_cap_s: 0
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L36,L156-L172,L392-L467"
+              notes: "Same policy; mode-agnostic."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: "len(read_regions)+1 (reads); len(write_regions)+1 (writes)"
+              wait_strategy: "fixed 500ms"
+              total_wait_cap_s: unknown
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_service_unavailable_retry_policy.py#L22-L67"
+              notes: "Dispatched at _retry_utility.py#L245-L249. Writes ARE retried. Requires EnableEndpointDiscovery=True."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "fixed 1s (defaultBackoff); cross-region failover advances preferredLocationIndex"
+              total_wait_cap_s: 120
+              cross_region: "conditional"
+              direct_only: false
+              source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go#L77-L80,L171-L180"
+              notes: "shouldRetryStatus returns true for any 503 (substatus ignored). Writes require multi-master. No exponential backoff at Cosmos layer."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: "applicable_endpoints count"
+              wait_strategy: "Duration::ZERO (immediate re-dispatch to next preferred location)"
+              total_wait_cap_s: 0
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs (503 branch ~L567 → ~L602 → ~L459)"
+              notes: "Single-write account writes receive DoNotRetry unless partition-level automatic failover enabled."
+
+      - id: internal_server_error_500
+        name: "500 Internal Server Error"
+        description: "Unexpected server error. Many SDKs retry reads only."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: 1
+              wait_strategy: "no_wait (TimeSpan.Zero)"
+              total_wait_cap_s: null
+              cross_region: "read_only"
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L352-L357,L506-L543"
+              notes: "500 is retried ONLY for read requests. Writes not retried."
+            gateway:
+              status: retries
+              max_retries: 1
+              wait_strategy: "no_wait"
+              total_wait_cap_s: null
+              cross_region: "read_only"
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L352-L357"
+              notes: "Same read-only rule for gateway."
+          java:
+            direct:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: "conditional"
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L193-L200,L496-L509"
+              notes: "NO_RETRY; only circuit-breaker bookkeeping. Client-assigned 500 sub-status codes are short-circuited."
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: "conditional"
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L193-L200,L496-L509"
+              notes: "Same."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: "len(applicable_read_regions)+1 (reads); request.retry_write (writes)"
+              wait_strategy: "fixed 500ms"
+              total_wait_cap_s: unknown
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_timeout_failover_retry_policy.py#L14-L60"
+              notes: "Dispatched at _retry_utility.py#L250 via 'e.status_code >= INTERNAL_SERVER_ERROR'. Same _TimeoutFailoverRetryPolicy as 408."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 3
+              wait_strategy: "azcore exponential w/ jitter"
+              total_wait_cap_s: 60
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/azcore/runtime/policy_retry.go#L46-L55"
+              notes: "Not handled at Cosmos layer; falls through to azcore default (includes 500)."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "1s (RETRY_INTERVAL_MS) between alternative-endpoint attempts"
+              total_wait_cap_s: unknown
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs (generic read fallback ~L593)"
+              notes: "Reads only; generic read fallback. Writes DoNotRetry (test_should_not_retry_internal_server_error_for_write at L962)."
+
+  - name: "Gone sub-status (direct-only semantics)"
+    scenarios:
+      - id: gone_generic_410
+        name: "410 Gone (no sub-status)"
+        description: "Generic 410 with no discriminating sub-status."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: unknown
+              wait_strategy: unknown
+              total_wait_cap_s: null
+              cross_region: false
+              direct_only: true
+              source_ref: "Closed-source Microsoft.Azure.Cosmos.Direct/GoneAndRetryWithRetryPolicy"
+              notes: "Direct transport handles via address-cache refresh. Exact counts not visible in public source."
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "no_wait"
+              total_wait_cap_s: null
+              cross_region: false
+              direct_only: true
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L246-L359"
+              notes: "Generic 410 not handled in ClientRetryPolicy. Gateway translates 410s to sub-status before responding; bare 410 not retried."
+          java:
+            direct:
+              status: retries
+              max_retries: "unbounded; bounded by 30s budget"
+              wait_strategy: "exp backoff 1s→15s cap"
+              total_wait_cap_s: 30
+              cross_region: false
+              direct_only: true
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/directconnectivity/GoneAndRetryWithRetryPolicy.java#L90-L94,L162-L247"
+              notes: "GoneRetryPolicy first attempt 0 backoff; subsequent exp. Non-idempotent transport 410 converted to 408 and NOT retried unless nonIdempotentWriteRetriesEnabled."
+            gateway:
+              status: unknown
+              max_retries: unknown
+              wait_strategy: unknown
+              total_wait_cap_s: unknown
+              cross_region: false
+              direct_only: true
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java"
+              notes: "Gateway normally translates generic 410; if raw 410 reaches client it falls through to ResourceThrottleRetryPolicy which rejects → effectively no_retry."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_retry_utility.py#L206-L257"
+              notes: "Only 410+PARTITION_KEY_RANGE_GONE matches _partition_range_is_gone. Generic 410 misses timeout_failover branch (<500) and falls to DefaultRetryPolicy → no retry."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "none"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go#L91-L97"
+              notes: "410 not in shouldRetryStatus nor azcore default. grep for '410' yields zero hits. Surfaces as non-retriable ResponseError."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "endpoint failover, 1s between attempts"
+              total_wait_cap_s: unknown
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs (should_retry_on_http_status ~L580 Gone+LEASE_NOT_FOUND branch; generic read fallback ~L593)"
+              notes: "Only 410/1022 (LEASE_NOT_FOUND) has explicit branch. Other 410s hit generic read-fallback for reads; writes not retried. No PKRange/address-cache refresh."
+
+      - id: gone_name_cache_stale
+        name: "410 / 1000 NameCacheIsStale"
+        description: "Collection metadata cache stale; direct-transport signal."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: unknown
+              wait_strategy: "no_wait after cache refresh"
+              total_wait_cap_s: null
+              cross_region: false
+              direct_only: true
+              source_ref: "Closed-source Microsoft.Azure.Cosmos.Direct/NameCacheStaleRetryPolicy; public-repo v2-query equivalent at Microsoft.Azure.Cosmos/src/Routing/InvalidPartitionExceptionRetryPolicy.cs"
+              notes: "Refreshes collection cache and retries once. Exact numbers not visible publicly."
+            gateway:
+              status: retries
+              max_retries: 1
+              wait_strategy: "no_wait (TimeSpan.Zero)"
+              total_wait_cap_s: null
+              cross_region: false
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/Routing/InvalidPartitionExceptionRetryPolicy.cs"
+              notes: "Refreshes CollectionCache then retries once."
+          java:
+            direct:
+              status: retries
+              max_retries: 1
+              wait_strategy: "immediate after cache refresh"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/StaleResourceRetryPolicy.java#L82-L148"
+              notes: "StaleResourceRetryPolicy refreshes RxClientCollectionCache then retries once."
+            gateway:
+              status: retries
+              max_retries: 1
+              wait_strategy: "immediate after cache refresh"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/StaleResourceRetryPolicy.java#L82-L148"
+              notes: "Also triggers for 400 INCORRECT_CONTAINER_RID_SUB_STATUS."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_retry_utility.py (no 1000 handler)"
+              notes: "No explicit handler for NAME_CACHE_IS_STALE (1000). Usually resolved server-side by gateway."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "none"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go#L91-L97"
+              notes: "Only sub-statuses 3, 1002, 1008 are defined (cosmos_http_constants.go#L99-L103). 1000 never consulted."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: not_started
+              max_retries: 0
+              wait_strategy: "none"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "No match in retry_policies/client_retry_policy.rs; constants.rs defines NAME_CACHE_IS_STALE=1000"
+              notes: "GAP: Not implemented. No collection/name cache refresh logic."
+
+      - id: gone_partition_key_range_gone
+        name: "410 / 1002 PartitionKeyRangeGone"
+        description: "PK-range has split/moved; routing map must be refreshed."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: 1
+              wait_strategy: "no_wait (TimeSpan.FromSeconds(0))"
+              total_wait_cap_s: null
+              cross_region: false
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/Query/v2Query/PartitionKeyRangeGoneRetryPolicy.cs#L108-L141"
+              notes: "Force-refreshes PartitionKeyRangeCache then retries once."
+            gateway:
+              status: retries
+              max_retries: 1
+              wait_strategy: "no_wait"
+              total_wait_cap_s: null
+              cross_region: false
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/Query/v2Query/PartitionKeyRangeGoneRetryPolicy.cs#L108-L141"
+              notes: "Same policy used in both modes for query path."
+          java:
+            direct:
+              status: retries
+              max_retries: 1
+              wait_strategy: "immediate after routing-map refresh"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/PartitionKeyRangeGoneRetryPolicy.java#L52-L107"
+              notes: "One cache refresh + retry. Direct transport additionally converts excess occurrences to 503."
+            gateway:
+              status: retries
+              max_retries: 1
+              wait_strategy: "immediate after routing-map refresh"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/PartitionKeyRangeGoneRetryPolicy.java#L52-L107"
+              notes: "Same policy, registered around RxGatewayStoreModel."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_gone_retry_policy.py#L30-L34; _retry_utility.py#L206-L219"
+              notes: "ShouldRetry always False; dispatcher instead calls refresh_routing_map_provider once and re-raises. Higher-level query layer may re-issue; the retry utility itself does not loop."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "none"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go#L91-L97"
+              notes: "sub '1002' is matched only against HTTP 404 (READ_SESSION_NOT_AVAILABLE). Under 410 falls through non-retriable."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: not_started
+              max_retries: 0
+              wait_strategy: "none"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "No match in should_retry_on_http_status; constants.rs aliases PARTITION_KEY_RANGE_GONE=READ_SESSION_NOT_AVAILABLE=1002"
+              notes: "GAP: No split-aware handler. Same numeric value as READ_SESSION_NOT_AVAILABLE but only the 404 path is handled."
+
+      - id: gone_completing_split
+        name: "410 / 1007 CompletingSplit"
+        description: "PK range is mid-split."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: unknown
+              wait_strategy: unknown
+              total_wait_cap_s: null
+              cross_region: false
+              direct_only: true
+              source_ref: "Closed-source Microsoft.Azure.Cosmos.Direct/GoneAndRetryWithRetryPolicy"
+              notes: "Retried by direct transport after PK-range cache refresh."
+            gateway:
+              status: unknown
+              max_retries: unknown
+              wait_strategy: unknown
+              total_wait_cap_s: null
+              cross_region: false
+              direct_only: true
+              source_ref: "n/a"
+              notes: "Direct-mode concept; not observed on gateway path in v3 source."
+          java:
+            direct:
+              status: retries
+              max_retries: "unbounded; 30s budget"
+              wait_strategy: "exp 1s→15s cap"
+              total_wait_cap_s: 30
+              cross_region: false
+              direct_only: true
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/directconnectivity/GoneAndRetryWithRetryPolicy.java#L275-L283,L162-L173"
+              notes: "handlePartitionKeyIsSplittingException resets resolvedPartitionKeyRange and forces force-refresh."
+            gateway:
+              status: unknown
+              max_retries: unknown
+              wait_strategy: unknown
+              total_wait_cap_s: unknown
+              cross_region: false
+              direct_only: true
+              source_ref: "n/a"
+              notes: "1007 is direct-mode-only signalling from replicas."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: true
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/exceptions.py#L157-L158 (helper defined but unused in _retry_utility)"
+              notes: "_is_partition_split_or_merge helper exists but is NOT consulted in _retry_utility.py. 410/1007 falls to DefaultRetryPolicy → no retry."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "none"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go#L91-L97"
+              notes: "No split-handling logic. No PartitionKeyRangeCache refresh. Non-retriable."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: not_started
+              max_retries: 0
+              wait_strategy: "none"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "No branch for SubStatusCode::COMPLETING_SPLIT (1007); constants.rs"
+              notes: "GAP: Not implemented."
+
+      - id: gone_completing_partition_migration
+        name: "410 / 1008 CompletingPartitionMigration"
+        description: "PK range is being migrated between federations."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: unknown
+              wait_strategy: unknown
+              total_wait_cap_s: null
+              cross_region: false
+              direct_only: true
+              source_ref: "Closed-source Microsoft.Azure.Cosmos.Direct/GoneAndRetryWithRetryPolicy"
+              notes: "Retried by direct transport after PK-range cache refresh."
+            gateway:
+              status: unknown
+              max_retries: unknown
+              wait_strategy: unknown
+              total_wait_cap_s: null
+              cross_region: false
+              direct_only: true
+              source_ref: "n/a"
+              notes: "Not handled in ClientRetryPolicy; gateway translates before returning."
+          java:
+            direct:
+              status: retries
+              max_retries: "unbounded; 30s budget"
+              wait_strategy: "exp 1s→15s cap"
+              total_wait_cap_s: 30
+              cross_region: false
+              direct_only: true
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/directconnectivity/GoneAndRetryWithRetryPolicy.java#L268-L274,L166-L168"
+              notes: "Sets forceCollectionRoutingMapRefresh=true. NOTE: 403/1008 is unrelated reuse of 1008."
+            gateway:
+              status: unknown
+              max_retries: unknown
+              wait_strategy: unknown
+              total_wait_cap_s: unknown
+              cross_region: false
+              direct_only: true
+              source_ref: "n/a"
+              notes: "Direct-mode-only signalling."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: true
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_retry_utility.py (no 1008 handler under 410)"
+              notes: "No handler for 410/COMPLETING_PARTITION_MIGRATION. Falls to DefaultRetryPolicy."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "none"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go#L91-L97"
+              notes: "sub '1008' matched only against HTTP 403 (DATABASE_ACCOUNT_NOT_FOUND). Under 410 falls through unhandled."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: not_started
+              max_retries: 0
+              wait_strategy: "none"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "No branch; constants.rs aliases COMPLETING_PARTITION_MIGRATION=DATABASE_ACCOUNT_NOT_FOUND=1008"
+              notes: "GAP: Not implemented; 1008 is an aliased constant shared with 403/1008, neither case is handled."
+
+  - name: "Session / consistency"
+    scenarios:
+      - id: not_found_read_session_unavailable
+        name: "404 / 1002 ReadSessionNotAvailable"
+        description: "Session token on current replica is older than client's token."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: "1 (single-master) / len(endpoints) (multi-master)"
+              wait_strategy: "no_wait"
+              total_wait_cap_s: null
+              cross_region: true
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L332-L343,L425-L477"
+              notes: "Multi-master iterates through endpoints. Adds x-ms-cosmos-should-process-only-in-hub-region on subsequent attempts."
+            gateway:
+              status: retries
+              max_retries: "1 (single-master) / len(endpoints) (multi-master)"
+              wait_strategy: "no_wait"
+              total_wait_cap_s: null
+              cross_region: true
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L332-L343,L425-L477"
+              notes: "Same policy."
+          java:
+            direct:
+              status: retries
+              max_retries: "inner unbounded within 5s budget; then cross-region via ClientRetryPolicy"
+              wait_strategy: "inner exp 5ms→500ms cap (x5 multiplier); then immediate cross-region"
+              total_wait_cap_s: 5
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/SessionTokenMismatchRetryPolicy.java#L23-L146 + ClientRetryPolicy.java#L150-L154,L236-L291"
+              notes: "Per-replica layer (ConsistencyReader/Writer); honours CosmosRegionSwitchHint. Client layer iterates regions — multi-write: one per region; single-write: max 3."
+            gateway:
+              status: retries
+              max_retries: "N regions (multi-write) or max 3 (single-write)"
+              wait_strategy: "immediate between regions"
+              total_wait_cap_s: 0
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L150-L154,L236-L291"
+              notes: "Only client-level policy applies; SessionTokenMismatchRetryPolicy is NOT wired for gateway."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: "1 (single-master) OR len(ordered_locations) (multi-master)"
+              wait_strategy: "immediate"
+              total_wait_cap_s: 0
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_session_retry_policy.py#L32-L33,L56-L125"
+              notes: "Dispatched at _retry_utility.py#L200-L205. Single-master: 1 retry then clears session token."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: "1 (single-master); len(available endpoints) (multi-master)"
+              wait_strategy: "no sleep — immediate retry against alternate endpoint"
+              total_wait_cap_s: 0
+              cross_region: "conditional"
+              direct_only: false
+              source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go#L73-L76,L154-L170"
+              notes: "attemptRetryOnSessionUnavailable. Single-master retries once against write endpoint."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: "N endpoints (multi-write) or 1 (single-write)"
+              wait_strategy: "immediate re-dispatch to another endpoint (Duration::ZERO)"
+              total_wait_cap_s: 0
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs (should_retry_on_session_not_available ~L267)"
+              notes: "Code comments say '404.1022' but constant value is 1002 (aliased with PARTITION_KEY_RANGE_GONE). enable_endpoint_discovery=false → DoNotRetry."
+
+  - name: "Region / endpoint failover"
+    scenarios:
+      - id: forbidden_write_forbidden
+        name: "403 / 3 WriteForbidden"
+        description: "Write arrived at read-only region; client must rediscover write region."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: 120
+              wait_strategy: "first retry no_wait; then fixed 1s"
+              total_wait_cap_s: null
+              cross_region: true
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L23-L24,L269-L313,L362-L423"
+              notes: "Force-refreshes endpoint cache and retries on next write endpoint. MaxRetryCount=120."
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "first retry no_wait; then fixed 1s"
+              total_wait_cap_s: null
+              cross_region: true
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L269-L313"
+              notes: "Same behavior."
+          java:
+            direct:
+              status: retries
+              max_retries: 120
+              wait_strategy: "writes: 0 delay first retry, then 1s; PPAF can force immediate retry"
+              total_wait_cap_s: 120
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L107-L121,L293-L321"
+              notes: "shouldRetryOnEndpointFailureAsync; MaxRetryCount=120."
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "writes: 0 delay first retry, then 1s"
+              total_wait_cap_s: 120
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L107-L121,L293-L321"
+              notes: "Same policy."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "fixed 1000ms"
+              total_wait_cap_s: 120
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_endpoint_discovery_retry_policy.py#L36-L37,L49-L103"
+              notes: "Forces global_endpoint_manager.refresh_needed=True. Requires EnableEndpointDiscovery=True."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "fixed 1s (defaultBackoff); endpoint marked unavailable + GEM refresh"
+              total_wait_cap_s: 120
+              cross_region: "conditional"
+              direct_only: false
+              source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go#L65-L72,L120-L152"
+              notes: "attemptRetryOnEndpointFailure. Requires enableCrossRegionRetries=true."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "endpoint failover (1s between attempts for writes after first) with cache refresh"
+              total_wait_cap_s: unknown
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs (should_retry_on_http_status 403+WRITE_FORBIDDEN ~L530 → should_retry_on_endpoint_failure ~L382)"
+              notes: "overwrite_endpoint_discovery=true forces account-refresh path."
+
+      - id: forbidden_database_account_not_found
+        name: "403 / 1008 DatabaseAccountNotFound"
+        description: "Requested regional endpoint no longer hosts this account; must refresh account topology."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: 120
+              wait_strategy: "reads: fixed 1s; writes: 0 first then 1s"
+              total_wait_cap_s: null
+              cross_region: true
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L316-L330,L362-L423"
+              notes: "Applies to reads OR multi-master writes."
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "reads: fixed 1s; writes: 0 first then 1s"
+              total_wait_cap_s: null
+              cross_region: true
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L316-L330"
+              notes: "Same."
+          java:
+            direct:
+              status: retries
+              max_retries: 120
+              wait_strategy: "fixed 1000ms between region retries"
+              total_wait_cap_s: 120
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L124-L131,L293-L321"
+              notes: "Reads only; isReadRequest gate. Writes NOT retried."
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "fixed 1000ms"
+              total_wait_cap_s: 120
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L124-L131,L293-L321"
+              notes: "Same policy."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "fixed 1000ms"
+              total_wait_cap_s: 120
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_endpoint_discovery_retry_policy.py#L36-L37,L49-L103"
+              notes: "Same EndpointDiscoveryRetryPolicy as WRITE_FORBIDDEN."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "fixed 1s + endpoint marked unavailable + GEM refresh"
+              total_wait_cap_s: 120
+              cross_region: "conditional"
+              direct_only: false
+              source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go#L65-L72,L120-L152"
+              notes: "Same handler as 403/3."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: not_started
+              max_retries: 0
+              wait_strategy: "none"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "No branch for 403+DATABASE_ACCOUNT_NOT_FOUND in should_retry_on_http_status; constants.rs aliases DATABASE_ACCOUNT_NOT_FOUND=COMPLETING_PARTITION_MIGRATION=1008"
+              notes: "GAP: Only 403/3 WRITE_FORBIDDEN handled. Writes with 403/1008 DoNotRetry. No account-endpoint refresh for this sub-status."
+
+      - id: cross_region_failover
+        name: "Cross-region failover"
+        description: "Multi-trigger: SDK fails over to next preferred region on endpoint unavailability."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: 120
+              wait_strategy: "first TimeSpan.Zero; then fixed 1s"
+              total_wait_cap_s: null
+              cross_region: true
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L23-L25,L362-L423"
+              notes: "Triggered by HttpRequestException, 403/3, 403/1008 read+multi-master, 404/1002, 503, 500(read), 410/1022. Single-master writes only fail over if PPAF or multi-region writes enabled."
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "first TimeSpan.Zero; then fixed 1s"
+              total_wait_cap_s: null
+              cross_region: true
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L362-L423,L506-L543"
+              notes: "Identical cross-region logic; ClientRetryPolicy sits above the transport."
+          java:
+            direct:
+              status: retries
+              max_retries: 120
+              wait_strategy: "fixed 1000ms between attempts"
+              total_wait_cap_s: 120
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L34-L35,L293-L356 + Configs.java#L414-L417"
+              notes: "Triggers: 403/3, 403/1008 read, GATEWAY_ENDPOINT_UNAVAILABLE, gateway-read-timeout, 503 (max 1 cross-region), SessionTokenMismatch escalation. PPAF can force immediate cross-region retries."
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "fixed 1000ms"
+              total_wait_cap_s: 120
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L34-L35,L293-L356"
+              notes: "Same ClientRetryPolicy orchestration."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: "varies by trigger (endpoint_discovery=120; timeout/unavailable=regions+1; service_request/response=region count)"
+              wait_strategy: "per-policy (1000ms endpoint; 500ms timeout/unavailable; immediate service_request/response)"
+              total_wait_cap_s: unknown
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_endpoint_discovery_retry_policy.py, _timeout_failover_retry_policy.py, _service_unavailable_retry_policy.py, _service_request_retry_policy.py, _service_response_retry_policy.py"
+              notes: "Emergent behavior of several policies. Writes only fail over when request.retry_write>0. PPAF adjusts endpoint selection inside individual policies."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "triggered by 403/{3,1008}, 503, or net.DNSError; 1s fixed sleep per hop"
+              total_wait_cap_s: 120
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go#L120-L152,L171-L180; cosmos_client.go#L53,L99"
+              notes: "EnableCrossRegionRetries hardcoded true (not ClientOptions-configurable). Writes fail over across regions only for multi-master accounts."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "1s between reads; writes 0s first failover then 1s"
+              total_wait_cap_s: unknown
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs (should_retry_on_endpoint_failure ~L382); tests ~L1231+"
+              notes: "Implemented via GlobalEndpointManager + preferred regions + excluded_regions. Writes only fail over when can_use_multiple_write_locations or partition-level automatic failover. enable_endpoint_discovery=false disables failover entirely."
+
+  - name: "Transport"
+    scenarios:
+      - id: network_connection_failure
+        name: "Network / TCP / DNS failure"
+        description: "Connection refused, TLS failure, DNS error, socket reset."
+        sdks:
+          dotnet:
+            direct:
+              status: retries
+              max_retries: unknown
+              wait_strategy: unknown
+              total_wait_cap_s: null
+              cross_region: true
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L80-L97 (HttpRequestException) + closed-source direct transport (TCP connect/TLS)"
+              notes: "Gateway HttpRequestException triggers cross-region failover. Direct TCP failures retried inside closed-source transport."
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "reads first no_wait; then fixed 1s"
+              total_wait_cap_s: null
+              cross_region: true
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L80-L97,L362-L423"
+              notes: "Mark both read+write unavailable, refresh endpoints, retry on next preferred. MaxRetryCount=120."
+          java:
+            direct:
+              status: retries
+              max_retries: "unbounded; 30s Gone budget"
+              wait_strategy: "exp 1s→15s then 503 then cross-region"
+              total_wait_cap_s: 30
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/directconnectivity/GoneAndRetryWithRetryPolicy.java#L162-L247 + ClientRetryPolicy.java#L134-L148,L156-L172"
+              notes: "Rntbd transient transport errors wrapped into GoneException, processed by GoneAndRetryWithRetryPolicy. On exhaustion synthesizes 503 → ClientRetryPolicy does 1 cross-region retry."
+            gateway:
+              status: retries
+              max_retries: 3
+              wait_strategy: "HttpTimeoutPolicyDefault delays (0,1,0)s; response timeout 60s each"
+              total_wait_cap_s: 180
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/WebExceptionRetryPolicy.java#L37-L109 + http/HttpTimeoutPolicyDefault.java#L15-L28 + ClientRetryPolicy.java#L134-L148"
+              notes: "Retries only if read OR address-refresh OR isWebExceptionRetriable. Writes generally not retried unless explicitly retriable."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: "len(applicable read|write regional_routing_contexts)"
+              wait_strategy: "azure-core ConnectionRetryPolicy (default connect=3 with own backoff) then immediate next-region"
+              total_wait_cap_s: unknown
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_service_request_retry_policy.py#L13-L88 + _retry_utility.py#L283-L290,L389-L475"
+              notes: "Raised as azure.core.exceptions.ServiceRequestError. Writes retried because request wasn't sent."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: 120
+              wait_strategy: "fixed 1s; endpoint marked unavailable for both read+write; GEM refresh"
+              total_wait_cap_s: 120
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go#L47-L61,L98-L118,L184-L188"
+              notes: "Only net.DNSError (via errors.As) is treated as network failure. Other transport errors (connection refused, TLS, syscall.Errno) are NOT retried at Cosmos layer."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: retries
+              max_retries: "3 on same endpoint, then up to 120 failovers"
+              wait_strategy: "1s between same-endpoint retries; then failover"
+              total_wait_cap_s: unknown
+              cross_region: true
+              direct_only: false
+              source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs (should_retry_on_connection_failure ~L321), MAX_RETRY_COUNT_ON_CONNECTION_FAILURE=3 (L30), MAX_RETRY_COUNT_ON_ENDPOINT_FAILURE=120 (L26)"
+              notes: "ErrorKind::Connection/Credential/DataConversion classified as NotSent → safe to retry reads AND writes. ErrorKind::Io after send: reads retry via unavailable-endpoint path; writes DoNotRetry."
+
+      - id: request_cancelled
+        name: "Request cancelled (user/deadline)"
+        description: "Operation cancelled via CancellationToken / context deadline / end-to-end timeout."
+        sdks:
+          dotnet:
+            direct:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "no_wait"
+              total_wait_cap_s: null
+              cross_region: false
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L141-L156"
+              notes: "OperationCanceledException NOT retried. Does bump PPAF/PPCB failure counter — indirectly can cause next request to fail over."
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "no_wait"
+              total_wait_cap_s: null
+              cross_region: false
+              direct_only: false
+              source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs#L141-L156"
+              notes: "Same."
+          java:
+            direct:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L87-L210"
+              notes: "CosmosEndToEndOperationLatencyPolicy enforces outer deadline. Pure Reactor cancellation propagates without entering any retry policy branch."
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java#L87-L210"
+              notes: "Same."
+          python:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "n_a"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_retry_utility.py#L128-L299"
+              notes: "Execute() catches only CosmosHttpResponseError, ServiceRequestError, ServiceResponseError. asyncio/futures CancelledError propagates. CosmosClientTimeoutError raised explicitly."
+          go:
+            direct: { status: n_a }
+            gateway:
+              status: no_retry
+              max_retries: 0
+              wait_strategy: "none"
+              total_wait_cap_s: 0
+              cross_region: false
+              direct_only: false
+              source_ref: "sdk/azcore/runtime/policy_retry.go#L159-L164,L199-L203"
+              notes: "azcore retryPolicy checks req.Raw().Context().Err() after each attempt and aborts on cancellation/deadline."
+          rust:
+            direct: { status: n_a }
+            gateway:
+              status: unknown
+              max_retries: unknown
+              wait_strategy: unknown
+              total_wait_cap_s: unknown
+              cross_region: false
+              direct_only: false
+              source_ref: "No explicit handling; depends on azure_core error mapping (retry_policies/mod.rs RequestSentExt ~L215)"
+              notes: "No dedicated cancellation branch. Behavior depends on ErrorKind mapping. Not covered by any test."
