@@ -16,10 +16,11 @@ A private dashboard tracking feature parity — and retry behavior — across al
 
 1. **`data/features.yaml`** — Curated feature × SDK parity matrix (source of truth)
 2. **`data/retries.yaml`** — Curated retry-behavior × SDK × connection-mode matrix (source of truth)
-3. **`data/sdks.yaml`** — SDK metadata (repos, changelog paths, versions)
-4. **`scripts/`** — Python scripts to scrape changelogs, detect retry-policy drift, and build snapshots
-5. **`site/`** — Static React dashboard (deployed to GitHub Pages) with **Features** and **Retries** tabs
-6. **`.github/workflows/`** — Weekly cron to update data and redeploy
+3. **`data/failovers.yaml`** — Curated multi-region / failover × SDK matrix (source of truth)
+4. **`data/sdks.yaml`** — SDK metadata (repos, changelog paths, versions)
+5. **`scripts/`** — Python scripts to scrape changelogs, detect source-file drift, and build snapshots
+6. **`site/`** — Static React dashboard (deployed to GitHub Pages) with **Features**, **Retries**, and **Failovers** tabs
+7. **`.github/workflows/`** — Weekly cron to update data and redeploy
 
 ## Quick Start
 
@@ -31,7 +32,10 @@ pip install -r scripts/requirements.txt
 python scripts/scrape_changelogs.py
 
 # Detect drift in retry-policy source files
-python scripts/scrape_retry_policies.py
+python scripts/scrape_source_refs.py --data data/retries.yaml --output retry_policies --label retry-policy
+
+# Detect drift in failover source files
+python scripts/scrape_source_refs.py --data data/failovers.yaml --output failover_policies --label failover-policy
 
 # Build and serve the dashboard
 cd site
@@ -88,12 +92,17 @@ Valid per-cell fields: `status` (`retries` | `no_retry` | `n_a` | `not_started` 
 
 ### Drift detection
 
-`scripts/scrape_retry_policies.py` fetches every file in `audit_refs`, hashes the normalized
-content with SHA-256, and compares to the last run (stored in
-`data/scraped/retry_policies_latest.json`). When any file's hash changes, the SDK is flagged
-`drift_detected: true` and a `data/scraped/retry_drift.md` report is written. The scraper
-**never** mutates `retries.yaml` — a human must re-audit the affected file and update curated
+`scripts/scrape_source_refs.py` is a generic scraper: point it at any curated
+YAML (retries or failovers) with an `audit_refs` section and it fetches every
+listed file, hashes the normalized content with SHA-256, and compares to the
+last run (stored in `data/scraped/<output>_latest.json`). When any file's hash
+changes, the SDK is flagged `drift_detected: true` and a
+`data/scraped/<output>_drift.md` report is written. The scraper **never**
+mutates the curated YAML — a human must re-audit the affected file and update
 behavior.
+
+`scripts/scrape_retry_policies.py` is kept as a backward-compatible shim that
+calls the generic scraper with retry-specific arguments.
 
 ### When drift is reported
 
@@ -108,8 +117,23 @@ behavior.
 `.github/workflows/update-parity.yml` runs every Monday at 06:00 UTC:
 
 1. Scrape SDK changelogs (`scrape_changelogs.py`)
-2. Scrape retry-policy source files, detect drift (`scrape_retry_policies.py`)
-3. Generate parity snapshot (`generate_snapshot.py`)
-4. Commit changed `data/` files
-5. Build and deploy the site
+2. Scrape retry-policy source files, detect drift (`scrape_source_refs.py --data data/retries.yaml`)
+3. Scrape failover source files, detect drift (`scrape_source_refs.py --data data/failovers.yaml`)
+4. Generate parity snapshot (`generate_snapshot.py`)
+5. Commit changed `data/` files
+6. Build and deploy the site
+
+## Updating Failover Behavior
+
+`data/failovers.yaml` describes, for each multi-region / failover *scenario*
+(endpoint discovery, write/read endpoint resolution, PPAF, circuit breaker,
+hedging, region exclusion, global-endpoint-manager internals), how every SDK
+behaves. Each cell should include a `source_ref` pinning the claim to a
+specific file + line in the SDK repo.
+
+Status vocabulary is slightly different from retries:
+`supported | partial | not_supported | not_started | n_a | unknown`.
+
+When a cell can't be verified from source, leave it as `unknown` with a short
+`notes` explanation — **never guess**.
 

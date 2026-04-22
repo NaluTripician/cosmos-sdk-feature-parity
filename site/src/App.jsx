@@ -5,6 +5,8 @@ import ParityStats from './components/ParityStats.jsx'
 import SdkHeader from './components/SdkHeader.jsx'
 import RetryMatrix from './components/RetryMatrix.jsx'
 import RetryStats from './components/RetryStats.jsx'
+import FailoverMatrix from './components/FailoverMatrix.jsx'
+import FailoverStats from './components/FailoverStats.jsx'
 
 const SDK_ORDER = ['dotnet', 'java', 'python', 'go', 'rust']
 
@@ -12,11 +14,12 @@ export default function App() {
   const [features, setFeatures] = useState(null)
   const [sdks, setSdks] = useState(null)
   const [retries, setRetries] = useState(null)
+  const [failovers, setFailovers] = useState(null)
   const [scrapeData, setScrapeData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('all') // all, gaps
-  const [tab, setTab] = useState('features') // features, retries
+  const [tab, setTab] = useState('features') // features, retries, failovers
 
   useEffect(() => {
     async function loadData() {
@@ -37,6 +40,17 @@ export default function App() {
           if (retriesResp.ok) {
             const retriesText = await retriesResp.text()
             setRetries(yaml.load(retriesText))
+          }
+        } catch (e) {
+          // optional
+        }
+
+        // failovers.yaml is optional while the audit is in flight.
+        try {
+          const failoversResp = await fetch(`${base}data/failovers.yaml`)
+          if (failoversResp.ok) {
+            const failoversText = await failoversResp.text()
+            setFailovers(yaml.load(failoversText))
           }
         } catch (e) {
           // optional
@@ -132,6 +146,7 @@ export default function App() {
             {[
               { id: 'features', label: '📋 Features' },
               { id: 'retries', label: '🔁 Retries' },
+              { id: 'failovers', label: '🌐 Failovers' },
             ].map(t => (
               <button
                 key={t.id}
@@ -219,12 +234,49 @@ export default function App() {
             />
           </>
         )}
+
+        {tab === 'failovers' && (
+          <>
+            <FailoverStats failovers={failovers} sdks={sdks} sdkOrder={SDK_ORDER} />
+
+            <div className="flex gap-2 mb-4 mt-6">
+              <button
+                onClick={() => setFilter('all')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  filter === 'all'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                All Scenarios
+              </button>
+              <button
+                onClick={() => setFilter('gaps')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  filter === 'gaps'
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                🔍 Divergent Only
+              </button>
+            </div>
+
+            <FailoverMatrix
+              failovers={failovers}
+              sdks={sdks}
+              sdkOrder={SDK_ORDER}
+              filter={filter}
+            />
+          </>
+        )}
       </main>
 
       <footer className="border-t mt-12 py-6 text-center text-sm text-gray-500">
-        Data sourced from SDK changelogs and retry-policy source files. Edit{' '}
-        <code className="bg-gray-100 px-1 rounded">data/features.yaml</code> or{' '}
-        <code className="bg-gray-100 px-1 rounded">data/retries.yaml</code>{' '}
+        Data sourced from SDK changelogs and pinned source files. Edit{' '}
+        <code className="bg-gray-100 px-1 rounded">data/features.yaml</code>,{' '}
+        <code className="bg-gray-100 px-1 rounded">data/retries.yaml</code>, or{' '}
+        <code className="bg-gray-100 px-1 rounded">data/failovers.yaml</code>{' '}
         to update.
       </footer>
     </div>
