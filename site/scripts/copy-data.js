@@ -25,7 +25,7 @@ function copyRecursive(src, dest) {
 fs.mkdirSync(publicDataDir, { recursive: true })
 
 // Copy key data files
-const filesToCopy = ['features.yaml', 'sdks.yaml', 'retries.yaml']
+const filesToCopy = ['features.yaml', 'sdks.yaml', 'retries.yaml', 'failovers.yaml']
 for (const file of filesToCopy) {
   const src = path.join(dataDir, file)
   if (fs.existsSync(src)) {
