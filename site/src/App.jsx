@@ -3,16 +3,20 @@ import yaml from 'js-yaml'
 import ParityMatrix from './components/ParityMatrix.jsx'
 import ParityStats from './components/ParityStats.jsx'
 import SdkHeader from './components/SdkHeader.jsx'
+import RetryMatrix from './components/RetryMatrix.jsx'
+import RetryStats from './components/RetryStats.jsx'
 
 const SDK_ORDER = ['dotnet', 'java', 'python', 'go', 'rust']
 
 export default function App() {
   const [features, setFeatures] = useState(null)
   const [sdks, setSdks] = useState(null)
+  const [retries, setRetries] = useState(null)
   const [scrapeData, setScrapeData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [filter, setFilter] = useState('all') // all, gaps, recent
+  const [filter, setFilter] = useState('all') // all, gaps
+  const [tab, setTab] = useState('features') // features, retries
 
   useEffect(() => {
     async function loadData() {
@@ -26,6 +30,17 @@ export default function App() {
         const sdksText = await sdksResp.text()
         setFeatures(yaml.load(featuresText))
         setSdks(yaml.load(sdksText).sdks)
+
+        // retries.yaml is optional while the audit is in flight.
+        try {
+          const retriesResp = await fetch(`${base}data/retries.yaml`)
+          if (retriesResp.ok) {
+            const retriesText = await retriesResp.text()
+            setRetries(yaml.load(retriesText))
+          }
+        } catch (e) {
+          // optional
+        }
 
         // Try to load scrape data (may not exist yet)
         try {
@@ -111,45 +126,105 @@ export default function App() {
           ))}
         </div>
 
-        {/* Parity Summary Bar */}
-        <ParityStats stats={stats} sdks={sdks} sdkOrder={SDK_ORDER} />
-
-        {/* Filter Controls */}
-        <div className="flex gap-2 mb-4 mt-6">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              filter === 'all'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            All Features
-          </button>
-          <button
-            onClick={() => setFilter('gaps')}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              filter === 'gaps'
-                ? 'bg-orange-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            🔍 Show Gaps Only
-          </button>
+        {/* Tab bar */}
+        <div className="border-b border-gray-200 mb-4">
+          <nav className="flex gap-1" aria-label="Tabs">
+            {[
+              { id: 'features', label: '📋 Features' },
+              { id: 'retries', label: '🔁 Retries' },
+            ].map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`px-4 py-2 text-sm font-medium rounded-t-md -mb-px border-b-2 transition-colors ${
+                  tab === t.id
+                    ? 'border-blue-600 text-blue-700 bg-white'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
         </div>
 
-        {/* Feature Parity Matrix */}
-        <ParityMatrix
-          features={features}
-          sdks={sdks}
-          sdkOrder={SDK_ORDER}
-          filter={filter}
-        />
+        {tab === 'features' && (
+          <>
+            <ParityStats stats={stats} sdks={sdks} sdkOrder={SDK_ORDER} />
+
+            <div className="flex gap-2 mb-4 mt-6">
+              <button
+                onClick={() => setFilter('all')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  filter === 'all'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                All Features
+              </button>
+              <button
+                onClick={() => setFilter('gaps')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  filter === 'gaps'
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                🔍 Show Gaps Only
+              </button>
+            </div>
+
+            <ParityMatrix
+              features={features}
+              sdks={sdks}
+              sdkOrder={SDK_ORDER}
+              filter={filter}
+            />
+          </>
+        )}
+
+        {tab === 'retries' && (
+          <>
+            <RetryStats retries={retries} sdks={sdks} sdkOrder={SDK_ORDER} />
+
+            <div className="flex gap-2 mb-4 mt-6">
+              <button
+                onClick={() => setFilter('all')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  filter === 'all'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                All Scenarios
+              </button>
+              <button
+                onClick={() => setFilter('gaps')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  filter === 'gaps'
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                🔍 Divergent Only
+              </button>
+            </div>
+
+            <RetryMatrix
+              retries={retries}
+              sdks={sdks}
+              sdkOrder={SDK_ORDER}
+              filter={filter}
+            />
+          </>
+        )}
       </main>
 
       <footer className="border-t mt-12 py-6 text-center text-sm text-gray-500">
-        Data sourced from SDK changelogs. Edit{' '}
-        <code className="bg-gray-100 px-1 rounded">data/features.yaml</code>{' '}
+        Data sourced from SDK changelogs and retry-policy source files. Edit{' '}
+        <code className="bg-gray-100 px-1 rounded">data/features.yaml</code> or{' '}
+        <code className="bg-gray-100 px-1 rounded">data/retries.yaml</code>{' '}
         to update.
       </footer>
     </div>

@@ -28,6 +28,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/scrape_changelogs.py
 
+      - name: Scrape retry-policy source files (drift detection)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/scrape_retry_policies.py
+
       - name: Generate parity snapshot
         run: python scripts/generate_snapshot.py
 
