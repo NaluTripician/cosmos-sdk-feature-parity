@@ -1,0 +1,473 @@
+# Cosmos DB SDK Multi-Region / Failover Behavior Matrix
+# Last audited: 2026-04-22
+#
+# Status values:
+#   supported     - Feature is implemented and exposed via public API
+#   partial       - Partially implemented (e.g., reads only, or preview-only)
+#   not_supported - SDK explicitly does not implement this
+#   not_started   - Feature tracked but no implementation yet (gap)
+#   n_a           - Not applicable to this SDK (e.g., direct mode for gateway-only)
+#   unknown       - Behavior not verified against source; needs audit
+#
+# Each scenario has a per-SDK block. When behavior differs by connection mode,
+# the cell is keyed `direct`/`gateway`. Otherwise the fields live directly on the
+# SDK cell (same convention as retries.yaml).
+#
+# Cross-reference:
+#   - retries.yaml covers per-status-code retry behavior.
+#   - failovers.yaml covers *where* a request goes next on failure/region change.
+#   Overlap (cross-region retry) is intentional — retries.yaml's `cross_region`
+#   field is the quick flag; this file captures the full regional logic.
+#
+# Drift detection: scripts/scrape_source_refs.py fetches the files in
+# `audit_refs` weekly and writes data/scraped/failover_drift.md when any file's
+# SHA-256 changes, so curators can re-audit.
+
+last_audited: "2026-04-22"
+
+sdks:
+  dotnet:
+    connection_modes: [direct, gateway]
+    repo: Azure/azure-cosmos-dotnet-v3
+    default_branch: master
+    global_endpoint_manager: "Microsoft.Azure.Cosmos/src/Routing/GlobalEndpointManager.cs"
+  java:
+    connection_modes: [direct, gateway]
+    repo: Azure/azure-sdk-for-java
+    default_branch: main
+    global_endpoint_manager: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/GlobalEndpointManager.java"
+  python:
+    connection_modes: [gateway]
+    repo: Azure/azure-sdk-for-python
+    default_branch: main
+    global_endpoint_manager: "sdk/cosmos/azure-cosmos/azure/cosmos/_global_endpoint_manager.py"
+  go:
+    connection_modes: [gateway]
+    repo: Azure/azure-sdk-for-go
+    default_branch: main
+    global_endpoint_manager: "sdk/data/azcosmos/cosmos_client.go"
+  rust:
+    connection_modes: [gateway]
+    repo: Azure/azure-sdk-for-rust
+    default_branch: main
+    global_endpoint_manager: "sdk/cosmos/azure_data_cosmos/src/pipeline/mod.rs"
+
+# Pinned source files watched for drift. Paths must exist at HEAD of each
+# SDK's default branch or the scraper will flag them as errors.
+audit_refs:
+  dotnet:
+    - "Microsoft.Azure.Cosmos/src/Routing/GlobalEndpointManager.cs"
+    - "Microsoft.Azure.Cosmos/src/Routing/LocationCache.cs"
+    - "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs"
+    - "Microsoft.Azure.Cosmos/src/CosmosClientOptions.cs"
+  java:
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/GlobalEndpointManager.java"
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/routing/LocationCache.java"
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java"
+    - "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/CosmosClientBuilder.java"
+  python:
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/_global_endpoint_manager.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/_location_cache.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/aio/_global_endpoint_manager_async.py"
+    - "sdk/cosmos/azure-cosmos/azure/cosmos/documents.py"
+  go:
+    - "sdk/data/azcosmos/cosmos_client.go"
+    - "sdk/data/azcosmos/cosmos_client_options.go"
+    - "sdk/data/azcosmos/cosmos_client_retry_policy.go"
+  rust:
+    - "sdk/cosmos/azure_data_cosmos/src/clients/cosmos_client.rs"
+    - "sdk/cosmos/azure_data_cosmos/src/pipeline/mod.rs"
+
+# ---------------------------------------------------------------------------
+# Categories & scenarios. Cells are `unknown` until a per-SDK audit fills them
+# in with a verified source_ref (file#L<line>). Never guess — `unknown` with a
+# short note is the correct placeholder.
+# ---------------------------------------------------------------------------
+categories:
+  - id: endpoint_discovery
+    name: "Endpoint discovery & preferred regions"
+    scenarios:
+      - id: preferred_regions_api
+        name: "Preferred regions API"
+        description: "How the ordered preferred-regions list is configured on the client."
+        sdks:
+          dotnet:
+            status: supported
+            api: "CosmosClientOptions.ApplicationPreferredRegions"
+            configurable: true
+            source_ref: "Microsoft.Azure.Cosmos/src/CosmosClientOptions.cs"
+            notes: "Ordered list; first entry is most preferred. ApplicationRegion is the single-region shortcut."
+          java:
+            status: supported
+            api: "CosmosClientBuilder.preferredRegions(List<String>)"
+            configurable: true
+            source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/CosmosClientBuilder.java"
+            notes: "Ordered list; first entry is most preferred."
+          python:
+            status: supported
+            api: "CosmosClient(preferred_locations=[...])"
+            configurable: true
+            source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/cosmos_client.py"
+            notes: "Requires enable_endpoint_discovery (default True)."
+          go:
+            status: unknown
+            api: "unknown"
+            configurable: false
+            source_ref: null
+            notes: "Needs audit: verify whether azcosmos exposes a preferred-regions list; likely limited."
+          rust:
+            status: unknown
+            api: "unknown"
+            configurable: false
+            source_ref: null
+            notes: "Preview SDK — needs audit."
+
+      - id: empty_list_default
+        name: "Default when preferred list is empty"
+        description: "Which region the client uses if no preferred regions are configured."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit: typically account's write region / first read region." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: unknown, notes: "Needs audit." }
+          rust: { status: unknown, notes: "Needs audit." }
+
+      - id: account_metadata_poll_interval
+        name: "Account metadata poll interval"
+        description: "How often the global endpoint manager refreshes account region metadata."
+        sdks:
+          dotnet:
+            status: supported
+            default: "5 minutes"
+            configurable: false
+            source_ref: "Microsoft.Azure.Cosmos/src/Routing/GlobalEndpointManager.cs"
+            notes: "Default background refresh interval is 5 minutes; verify exact constant during audit."
+          java:
+            status: supported
+            default: "5 minutes"
+            configurable: false
+            source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/GlobalEndpointManager.java"
+            notes: "Background refresh; verify constant during audit."
+          python:
+            status: supported
+            default: "5 minutes"
+            configurable: false
+            source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_global_endpoint_manager.py"
+            notes: "refresh_time_interval_in_ms; verify during audit."
+          go: { status: unknown, notes: "Needs audit." }
+          rust: { status: unknown, notes: "Needs audit." }
+
+      - id: manual_refresh_api
+        name: "Manual refresh API"
+        description: "Public API to force-refresh endpoint topology (e.g., for tests or game days)."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit: RefreshLocationAsync may be internal." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: unknown, notes: "Needs audit." }
+          rust: { status: unknown, notes: "Needs audit." }
+
+  - id: write_endpoint
+    name: "Write endpoint resolution"
+    scenarios:
+      - id: single_write_account
+        name: "Single-write account: write region election"
+        description: "How the write endpoint is chosen when the account has one writable region."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit: typically account write region from metadata." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: unknown, notes: "Needs audit." }
+          rust: { status: unknown, notes: "Needs audit." }
+
+      - id: multi_write_account
+        name: "Multi-write account: write region election"
+        description: "How the write endpoint is chosen when the account supports multi-region writes."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit: typically first preferred region that's a write region." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: unknown, notes: "Needs audit." }
+          rust: { status: unknown, notes: "Needs audit." }
+
+      - id: write_region_change_detection
+        name: "Detection of write region change"
+        description: "How the client notices a write region change (e.g., after failover) and invalidates cache."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit: 403/3 WriteForbidden triggers refresh." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: unknown, notes: "Needs audit." }
+          rust: { status: unknown, notes: "Needs audit." }
+
+  - id: read_endpoint
+    name: "Read endpoint resolution"
+    scenarios:
+      - id: read_region_selection_order
+        name: "Read region selection order"
+        description: "Order in which read endpoints are chosen per request."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit: preferred list intersected with account read regions." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: unknown, notes: "Needs audit." }
+          rust: { status: unknown, notes: "Needs audit." }
+
+      - id: read_fallback_on_outage
+        name: "Read fallback on region outage"
+        description: "What triggers cross-region read failover and what does not."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: unknown, notes: "Needs audit." }
+          rust: { status: unknown, notes: "Needs audit." }
+
+      - id: session_routing_after_write_move
+        name: "Session routing after write region move"
+        description: "Whether session-consistent reads follow a moved write region correctly."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: unknown, notes: "Needs audit." }
+          rust: { status: unknown, notes: "Needs audit." }
+
+  - id: cross_region_retry
+    name: "Regional failover on request failures"
+    scenarios:
+      - id: cross_region_triggers
+        name: "Status codes that trigger cross-region retry"
+        description: "Which status/sub-status combinations cause the client to try a different region."
+        sdks:
+          dotnet:
+            status: supported
+            notes: "403/3 (WriteForbidden), 403/1008 (DatabaseAccountNotFound), 404/1002 (ReadSessionNotAvailable), 503, network errors. See retries.yaml for per-status detail."
+            source_ref: "Microsoft.Azure.Cosmos/src/ClientRetryPolicy.cs"
+          java:
+            status: supported
+            notes: "Similar to .NET; see retries.yaml cross_region fields."
+            source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/ClientRetryPolicy.java"
+          python:
+            status: partial
+            notes: "Cross-region supported via timeout_failover_retry_policy; see retries.yaml."
+            source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_timeout_failover_retry_policy.py"
+          go:
+            status: not_supported
+            notes: "azcosmos currently does not implement client-side cross-region retry (falls through to azcore)."
+            source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go"
+          rust:
+            status: not_started
+            notes: "Preview SDK — no cross-region retry logic yet; needs audit to confirm."
+
+      - id: region_retry_budget
+        name: "Cross-region retry budget"
+        description: "Max regions attempted, per-call or per-client, and any time cap."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: not_supported, notes: "Not applicable: no cross-region retry." }
+          rust: { status: unknown, notes: "Needs audit." }
+
+      - id: unhealthy_region_eviction
+        name: "Unhealthy region marking & eviction"
+        description: "Does a failed read region get marked unhealthy, and after what timeout is it reconsidered?"
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit: LocationCache unavailability tracking." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: not_supported, notes: "Not tracked." }
+          rust: { status: unknown, notes: "Needs audit." }
+
+  - id: ppaf
+    name: "Per-Partition Automatic Failover (PPAF)"
+    scenarios:
+      - id: ppaf_implemented
+        name: "PPAF implementation status"
+        description: "Whether the SDK tracks partition-level unhealthy state and can failover per PK range."
+        sdks:
+          dotnet:
+            status: partial
+            notes: "Implemented; typically behind a preview flag. Needs audit to confirm GA vs preview."
+            source_ref: "Microsoft.Azure.Cosmos/src/Routing/LocationCache.cs"
+          java:
+            status: partial
+            notes: "perPartitionAutomaticFailover package present in repo. Needs audit for GA status."
+            source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/perPartitionAutomaticFailover"
+          python:
+            status: partial
+            notes: "PPAF present in aio/_global_partition_endpoint_manager_per_partition_automatic_failover_async.py. Needs audit for sync parity."
+            source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/aio/_global_partition_endpoint_manager_per_partition_automatic_failover_async.py"
+          go:
+            status: not_started
+            notes: "Not present in azcosmos."
+          rust:
+            status: not_started
+            notes: "Not present in preview SDK."
+
+      - id: ppaf_failback_criteria
+        name: "PPAF failback criteria"
+        description: "What probe success count / cooldown allows traffic to return to a previously unhealthy region."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: not_started }
+          rust: { status: not_started }
+
+      - id: ppaf_observability
+        name: "PPAF observability"
+        description: "Diagnostics fields and metrics emitted when a PK-range failover occurs."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit: diagnostic context fields." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: not_started }
+          rust: { status: not_started }
+
+  - id: circuit_breaker
+    name: "Client-side circuit breaker"
+    scenarios:
+      - id: circuit_breaker_exists
+        name: "Circuit breaker implementation"
+        description: "Does the SDK track consecutive endpoint failures and open/close a breaker?"
+        sdks:
+          dotnet:
+            status: supported
+            api: "CosmosClientOptions.ConsecutiveExceptionCountToleratedForReads/Writes"
+            notes: "Opt-in; needs audit for exact defaults."
+            source_ref: "Microsoft.Azure.Cosmos/src/CosmosClientOptions.cs"
+          java:
+            status: supported
+            notes: "circuitBreaker package present. Needs audit for config API."
+            source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/circuitBreaker"
+          python:
+            status: partial
+            notes: "_global_partition_endpoint_manager_circuit_breaker_async.py in aio/. Sync may lack."
+            source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/aio/_global_partition_endpoint_manager_circuit_breaker_async.py"
+          go:
+            status: not_started
+          rust:
+            status: not_started
+
+      - id: circuit_breaker_thresholds
+        name: "Breaker open thresholds"
+        description: "What opens the breaker (error classes, consecutive count, time window)."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: not_started }
+          rust: { status: not_started }
+
+      - id: circuit_breaker_granularity
+        name: "Breaker granularity"
+        description: "Per-endpoint, per-partition, or per-request-type."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit: typically per endpoint + read/write split." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: not_started }
+          rust: { status: not_started }
+
+  - id: availability_strategy
+    name: "Availability strategy / hedging"
+    scenarios:
+      - id: hedging_supported
+        name: "Parallel speculative reads (hedging)"
+        description: "Does the SDK issue a second request to another region after a threshold?"
+        sdks:
+          dotnet:
+            status: supported
+            api: "AvailabilityStrategy (CrossRegionHedgingAvailabilityStrategy)"
+            notes: "Public API; needs audit for defaults."
+            source_ref: "Microsoft.Azure.Cosmos/src/CosmosClientOptions.cs"
+          java:
+            status: supported
+            api: "ThresholdBasedAvailabilityStrategy"
+            notes: "Public API."
+            source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/implementation/availability"
+          python:
+            status: supported
+            api: "AvailabilityStrategy"
+            notes: "Public API; async first."
+            source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/aio/_asynchronous_availability_strategy_handler.py"
+          go:
+            status: not_started
+          rust:
+            status: not_started
+
+      - id: hedging_threshold_config
+        name: "Hedging threshold configuration"
+        description: "API and default threshold/step values."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit for default ms values." }
+          java: { status: unknown, notes: "Default typically 500ms threshold, 100ms step — confirm." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: not_started }
+          rust: { status: not_started }
+
+      - id: hedging_applies_to_writes
+        name: "Hedging applies to idempotent writes?"
+        description: "Whether the strategy hedges non-read operations."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: not_started }
+          rust: { status: not_started }
+
+  - id: region_exclusion
+    name: "Region exclusion / blacklist"
+    scenarios:
+      - id: excluded_regions_api
+        name: "ExcludedRegions API"
+        description: "Per-request or per-client API to temporarily exclude regions."
+        sdks:
+          dotnet:
+            status: supported
+            api: "RequestOptions.ExcludeRegions / CosmosClientOptions.ExcludeRegions"
+            notes: "Public API."
+            source_ref: "Microsoft.Azure.Cosmos/src/CosmosClientOptions.cs"
+          java:
+            status: supported
+            api: "CosmosRequestOptions.setExcludedRegions(List<String>)"
+            notes: "Public API."
+            source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/CosmosClientBuilder.java"
+          python: { status: unknown, notes: "Needs audit: may be named excluded_locations." }
+          go: { status: not_started, notes: "Not exposed." }
+          rust: { status: not_started, notes: "Not exposed." }
+
+  - id: gem_internals
+    name: "Global endpoint manager internals"
+    scenarios:
+      - id: polled_url
+        name: "Polled account URL"
+        description: "Which endpoint the manager polls for account metadata."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit: typically GET on account endpoint." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: unknown, notes: "Needs audit." }
+          rust: { status: unknown, notes: "Needs audit." }
+
+      - id: poll_failure_backoff
+        name: "Poll failure backoff"
+        description: "Backoff behavior when the metadata poll fails."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: unknown, notes: "Needs audit." }
+          rust: { status: unknown, notes: "Needs audit." }
+
+      - id: bootstrap_behavior
+        name: "Initial bootstrap behavior"
+        description: "Blocking vs. eager async on first account metadata fetch."
+        sdks:
+          dotnet: { status: unknown, notes: "Needs audit." }
+          java: { status: unknown, notes: "Needs audit." }
+          python: { status: unknown, notes: "Needs audit." }
+          go: { status: unknown, notes: "Needs audit." }
+          rust: { status: unknown, notes: "Needs audit." }
