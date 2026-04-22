@@ -1,5 +1,5 @@
 # Cosmos DB SDK Feature Parity Matrix
-# Last updated: 2026-04-15 (audited against source code)
+# Last updated: 2026-04-21 (audited against upstream SDK CHANGELOGs)
 #
 # Status values:
 #   ga           - Generally Available
@@ -57,8 +57,8 @@ categories:
         name: "ReadMany / ReadItems"
         description: "Read multiple items by ID+PK in a single request across partitions"
         sdks:
-          dotnet: { status: "ga", since: "3.25.0" }
-          java: { status: "ga", since: "4.32.0" }
+          dotnet: { status: "ga", since: "3.18.0", notes: "ReadManyApi added in PR #2352 under 3.18.0 (2022-01)" }
+          java: { status: "ga", since: "4.14.0", notes: "readMany() GA in 4.14.0 (2021-04-06)" }
           python: { status: "ga", since: "4.14.0b3", notes: "read_items API" }
           go: { status: "preview", since: "1.5.0-beta.2" }
           rust: { status: "not_started" }
@@ -71,7 +71,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "not_started" }
-          rust: { status: "ga", since: "0.25.0", notes: "StoredProcedureReference; pre/post triggers via ItemOptions" }
+          rust: { status: "preview", since: "0.25.0", notes: "Only pre/post triggers via ItemOptions (PR #2744). No StoredProcedureClient or UDF client in public surface." }
 
   - name: "Query"
     features:
@@ -131,18 +131,18 @@ categories:
         name: "Vector Search Indexing Policy"
         description: "Configure vector embedding indexes on containers"
         sdks:
-          dotnet: { status: "ga", since: "3.40.0" }
+          dotnet: { status: "ga", since: "3.50.0", notes: "Preview APIs in 3.46.0-preview.0 (PR #4837) / 3.49.0 (PR #5136); GA surface in 3.50.0 range. 3.55.0 adds GA IndexingSearchListSize and VectorIndexShardKey (PR #5462)." }
           java: { status: "ga", since: "4.60.0" }
           python: { status: "ga", since: "4.7.0" }
           go: { status: "preview", since: "1.5.0-beta.1" }
-          rust: { status: "ga", since: "0.28.0", notes: "VectorIndex with Flat/QuantizedFlat/DiskANN types" }
+          rust: { status: "not_started", notes: "No vector index APIs found in azure_data_cosmos CHANGELOG through 0.31.0." }
 
       - id: full_text_search_index
         name: "Full-Text Search Indexing Policy"
         description: "Configure full-text indexes for BM25 scoring"
         sdks:
-          dotnet: { status: "ga", since: "3.40.0" }
-          java: { status: "ga", since: "4.79.0" }
+          dotnet: { status: "ga", since: "3.50.0", notes: "Introduced in 3.46.0-preview.0 (PR #4837: ContainerProperties Full Text Search and Indexing Policy); APIs made public in 3.50.0 (PR #5150)." }
+          java: { status: "ga", since: "4.65.0", notes: "CosmosFullTextPolicy + CosmosFullTextIndexes added in 4.65.0 (PR #42278)." }
           python: { status: "ga", since: "4.9.0" }
           go: { status: "preview", since: "1.5.0-beta.1" }
           rust: { status: "not_started" }
@@ -151,8 +151,8 @@ categories:
         name: "Hybrid Search (Vector + FTS)"
         description: "Combined vector similarity and full-text search queries"
         sdks:
-          dotnet: { status: "ga", since: "3.47.0" }
-          java: { status: "ga", since: "4.63.0" }
+          dotnet: { status: "ga", since: "3.50.0", notes: "Hybrid search query feature (FullTextContains*, weighted RRF) introduced in 3.48.0-preview.x; fixes/GA finalization in 3.50.0 (PRs #5145, #5150)." }
+          java: { status: "ga", since: "4.65.0", notes: "HybridSearch + CountIf query features added in 4.65.0 (PR #42885)." }
           python: { status: "ga", since: "4.9.0" }
           go: { status: "not_started" }
           rust: { status: "not_started" }
@@ -255,8 +255,8 @@ categories:
         name: "Cross-Region Hedging / Availability Strategy"
         description: "Parallel speculative requests to secondary regions for lower latency"
         sdks:
-          dotnet: { status: "ga", since: "3.47.0" }
-          java: { status: "ga", since: "4.63.0" }
+          dotnet: { status: "ga", since: "3.47.0", notes: "Reads CrossRegionalHedging GA in 3.47.0 (PR #4966); writes GA in 3.50.0 (PR #5190); RequestOptions-level hedging GA in 3.54.0 (PR #5411)." }
+          java: { status: "ga", since: "4.53.0", notes: "EndToEndOperationLatencyPolicyConfig.availabilityStrategy introduced around 4.53.0 (PR #37511)." }
           python: { status: "ga", since: "4.15.0" }
           go: { status: "not_started" }
           rust: { status: "not_started" }
@@ -265,8 +265,8 @@ categories:
         name: "Per-Partition Automatic Failover (PPAF)"
         description: "Automatic failover at individual partition level"
         sdks:
-          dotnet: { status: "ga", since: "3.50.0" }
-          java: { status: "ga", since: "4.63.0" }
+          dotnet: { status: "ga", since: "3.51.0", notes: "First PPAF changelog entry is PR #5182 in 3.51.0 (enablement flag via gateway); 3.58.0 adds Hub Region processing (PR #5447)." }
+          java: { status: "ga", since: "4.69.0", notes: "Per-Partition Automatic Failover first appears around 4.69.0." }
           python: { status: "ga", since: "4.15.0" }
           go: { status: "not_started" }
           rust: { status: "not_started" }
@@ -275,8 +275,8 @@ categories:
         name: "Per-Partition Circuit Breaker"
         description: "Circuit breaker pattern at partition level to avoid unhealthy replicas"
         sdks:
-          dotnet: { status: "ga", since: "3.50.0" }
-          java: { status: "ga", since: "4.63.0" }
+          dotnet: { status: "ga", notes: "Feature exists as CosmosClientOptions.EnablePartitionLevelCircuitBreaker but is not called out by name in changelog.md; version unverified from changelog." }
+          java: { status: "ga", since: "4.63.1", notes: "Circuit breaker exception-tolerance fix in 4.63.1 (PR #41428)." }
           python: { status: "preview", since: "4.13.0b1" }
           go: { status: "not_started" }
           rust: { status: "not_started" }
@@ -285,8 +285,8 @@ categories:
         name: "N-Region Synchronous Commit"
         description: "Synchronous replication to N regions before acknowledging writes"
         sdks:
-          dotnet: { status: "ga", since: "3.58.0" }
-          java: { status: "ga", since: "4.79.0" }
+          dotnet: { status: "ga", since: "3.58.0", notes: "3.58.0 refactors N-Region Synchronous Commit to new IServiceConfigurationReaderVNext interface (PR #5610); original introduction was in an earlier preview." }
+          java: { status: "ga", since: "4.79.0", notes: "Added in 4.79.0 (PR #47757)." }
           python: { status: "not_started" }
           go: { status: "not_started" }
           rust: { status: "not_started" }
@@ -295,8 +295,8 @@ categories:
         name: "Excluded Regions"
         description: "Exclude specific regions from routing at client or request level"
         sdks:
-          dotnet: { status: "ga", since: "3.35.0" }
-          java: { status: "ga", since: "4.50.0" }
+          dotnet: { status: "ga", notes: "Feature exists as CosmosClientOptions.ExcludeRegions / RequestOptions.ExcludeRegions but is not called out in changelog.md; version unverified." }
+          java: { status: "ga", since: "4.51.0", notes: "CosmosClientBuilder#excludedRegionSupplier and CosmosExcludedRegions added in 4.51.0 (PR #36616)." }
           python: { status: "ga", since: "4.12.0" }
           go: { status: "not_started" }
           rust: { status: "ga", since: "0.31.0" }
@@ -369,8 +369,8 @@ categories:
         name: "Priority-Based Throttling"
         description: "Set request priority for throttling decisions"
         sdks:
-          dotnet: { status: "ga", since: "3.33.0" }
-          java: { status: "ga", since: "4.40.0" }
+          dotnet: { status: "ga", since: "3.33.0", notes: "PriorityLevel RequestOption in 3.33.0-preview (PR #3672); GA PriorityLevel in CosmosClientOptions in 3.38.0 (PR #4262)." }
+          java: { status: "ga", since: "4.45.0", notes: "Priority-based throttling added in 4.45.0 (PR #34121)." }
           python: { status: "ga", since: "4.14.2" }
           go: { status: "not_started" }
           rust: { status: "ga", since: "0.30.0", notes: "PriorityLevel enum: High/Low" }
@@ -379,11 +379,11 @@ categories:
         name: "Integrated Cache Support"
         description: "MaxIntegratedCacheStaleness and BypassIntegratedCache options"
         sdks:
-          dotnet: { status: "ga", since: "3.25.0" }
-          java: { status: "ga", since: "4.25.0" }
+          dotnet: { status: "ga", since: "3.30.0", notes: "DedicatedGatewayRequestOptions public in 3.30.0 (PR #3364); BypassIntegratedCache preview in 3.35.0-preview (PR #3836), public GA in 3.36.x (PR #4377)." }
+          java: { status: "ga", since: "4.49.0", notes: "Dedicated-gateway integrated-cache support landed in 4.49.0." }
           python: { status: "ga", since: "4.5.0" }
           go: { status: "ga", since: "1.1.0" }
-          rust: { status: "ga", since: "0.30.0", notes: "DedicatedGatewayOptions with staleness and bypass" }
+          rust: { status: "not_started", notes: "DedicatedGatewayOptions not found in azure_data_cosmos CHANGELOG through 0.31.0." }
 
   - name: "Observability"
     features:
@@ -392,7 +392,7 @@ categories:
         description: "Distributed tracing with OpenTelemetry spans"
         sdks:
           dotnet: { status: "ga", since: "3.33.0" }
-          java: { status: "ga", since: "4.40.0" }
+          java: { status: "ga", since: "4.43.0", notes: "OpenTelemetry work begins in 4.43.0 (PR #34999)." }
           python: { status: "ga", since: "4.12.0" }
           go: { status: "ga", since: "1.1.0" }
           rust: { status: "not_started" }
@@ -414,7 +414,7 @@ categories:
         description: "Lightweight client routing through Gateway V2 proxy"
         sdks:
           dotnet: { status: "preview", since: "3.57.0" }
-          java: { status: "preview", since: "4.65.0" }
+          java: { status: "preview", since: "4.66.1", notes: "Internal-only thin client mode enabled via system property in 4.66.1 (PR #43937)." }
           python: { status: "not_started" }
           go: { status: "not_started" }
           rust: { status: "not_started" }
@@ -423,8 +423,8 @@ categories:
         name: "Fault Injection"
         description: "Simulate failures for resilience testing"
         sdks:
-          dotnet: { status: "ga", since: "3.40.0" }
-          java: { status: "ga", since: "4.50.0" }
+          dotnet: { status: "ga", notes: "Exposed via separate Microsoft.Azure.Cosmos.FaultInjection NuGet package; not tracked in the main Microsoft.Azure.Cosmos changelog." }
+          java: { status: "ga", since: "4.42.0", notes: "Fault injection support added in 4.42.0 (PR #33329)." }
           python: { status: "preview", notes: "FaultInjectionTransport test utility; not yet public API" }
           go: { status: "not_started" }
           rust: { status: "preview", since: "0.31.0", notes: "Behind fault_injection feature flag" }
@@ -443,7 +443,7 @@ categories:
         name: "Automatic Write Retries"
         description: "Automatic retries for idempotent write operations"
         sdks:
-          dotnet: { status: "ga", since: "3.35.0" }
+          dotnet: { status: "ga", notes: "Exposed via CosmosClientOptions.NonIdempotentWriteRetryOptions; not called out by name in changelog.md so since-version unverified." }
           java: { status: "ga", since: "4.30.0" }
           python: { status: "ga", since: "4.14.0b1", notes: "retry_write parameter on write operations" }
           go: { status: "not_started" }
