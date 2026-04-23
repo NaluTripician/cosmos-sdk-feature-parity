@@ -38,6 +38,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/scrape_source_refs.py --data data/failovers.yaml --output failover_policies --label failover-policy
 
+      - name: Scrape Rust public API from docs.rs (drift detection)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/scrape_public_api_rust.py
+        continue-on-error: true
+
       - name: Generate parity snapshot
         run: python scripts/generate_snapshot.py
 
