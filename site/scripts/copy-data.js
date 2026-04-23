@@ -34,6 +34,16 @@ for (const file of filesToCopy) {
   }
 }
 
+// Copy last_successful_run.json heartbeat if it exists (written by the
+// weekly update-parity workflow so the site can surface freshness).
+const heartbeatSrc = path.join(dataDir, 'scraped', 'last_successful_run.json')
+if (fs.existsSync(heartbeatSrc)) {
+  const heartbeatDestDir = path.join(publicDataDir, 'scraped')
+  fs.mkdirSync(heartbeatDestDir, { recursive: true })
+  fs.copyFileSync(heartbeatSrc, path.join(heartbeatDestDir, 'last_successful_run.json'))
+  console.log('Copied scraped/last_successful_run.json')
+}
+
 // Copy scraped directory if it exists
 const scrapedSrc = path.join(dataDir, 'scraped')
 const scrapedDest = path.join(publicDataDir, 'scraped')

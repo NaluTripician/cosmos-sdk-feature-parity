@@ -16,6 +16,7 @@ export default function App() {
   const [retries, setRetries] = useState(null)
   const [failovers, setFailovers] = useState(null)
   const [scrapeData, setScrapeData] = useState(null)
+  const [lastRun, setLastRun] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('all') // all, gaps
@@ -66,6 +67,16 @@ export default function App() {
           // Scrape data is optional
         }
 
+        // Try to load last-successful-run heartbeat written by the weekly workflow.
+        try {
+          const lastRunResp = await fetch(`${base}data/scraped/last_successful_run.json`)
+          if (lastRunResp.ok) {
+            setLastRun(await lastRunResp.json())
+          }
+        } catch (e) {
+          // Heartbeat is optional
+        }
+
         setLoading(false)
       } catch (e) {
         setError(e.message)
@@ -110,6 +121,59 @@ export default function App() {
 
   const stats = computeStats()
 
+  const lastRunBadge = (() => {
+    if (!lastRun) return null
+    const timestampStr = lastRun.timestamp || lastRun.run_started_at
+    if (!timestampStr) return null
+    const started = new Date(timestampStr)
+    if (Number.isNaN(started.getTime())) return null
+    const ageMs = Date.now() - started.getTime()
+    const ageDays = ageMs / (1000 * 60 * 60 * 24)
+    const stale = ageDays > 10
+    const failed = lastRun.success === false
+    const failedScrapers = Array.isArray(lastRun.failed_scrapers) ? lastRun.failed_scrapers : []
+
+    const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+    let relative
+    if (ageDays < 1) {
+      const hours = Math.round(ageMs / (1000 * 60 * 60))
+      relative = rtf.format(-hours, 'hour')
+    } else {
+      relative = rtf.format(-Math.round(ageDays), 'day')
+    }
+
+    let classes
+    let icon
+    let title
+    let label
+    if (failed) {
+      classes = 'bg-red-600 text-red-50'
+      icon = '🛑 '
+      const list = failedScrapers.length ? failedScrapers.join(', ') : 'unknown'
+      title = `Last weekly run failed — broken scrapers: ${list}. Ran ${started.toUTCString()}.`
+      label = `Scrapers failing (${failedScrapers.length || '?'})`
+    } else if (stale) {
+      classes = 'bg-amber-500 text-amber-950'
+      icon = '⚠️ '
+      title = 'Weekly refresh may be stale — check Actions'
+      label = `Last updated ${relative}`
+    } else {
+      classes = 'bg-blue-800/60 text-blue-100'
+      icon = '🟢 '
+      title = `Last successful workflow run: ${started.toUTCString()}`
+      label = `Last updated ${relative}`
+    }
+
+    return (
+      <span
+        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium mt-2 ${classes}`}
+        title={title}
+      >
+        {icon}{label}
+      </span>
+    )
+  })()
+
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -119,6 +183,7 @@ export default function App() {
           <p className="text-blue-200 mt-1">
             Tracking feature support across .NET, Java, Python, Go, and Rust SDKs
           </p>
+          {lastRunBadge}
           {scrapeData && (
             <p className="text-blue-300 text-sm mt-1">
               Last updated: {new Date(scrapeData.scraped_at).toLocaleDateString()}

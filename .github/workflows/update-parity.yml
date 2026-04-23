@@ -13,6 +13,7 @@ permissions:
 jobs:
   update-data:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -24,19 +25,61 @@ jobs:
         run: pip install -r scripts/requirements.txt
 
       - name: Scrape changelogs from SDK repos
+        id: scrape_changelogs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/scrape_changelogs.py
+        run: |
+          if python scripts/scrape_changelogs.py; then
+            echo "artifact=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "artifact=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Scrape retry-policy source files (drift detection)
+        id: scrape_retries
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/scrape_source_refs.py --data data/retries.yaml --output retry_policies --label retry-policy
+        run: |
+          if python scripts/scrape_source_refs.py --data data/retries.yaml --output retry_policies --label retry-policy; then
+            echo "artifact=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "artifact=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Scrape failover source files (drift detection)
+        id: scrape_failovers
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/scrape_source_refs.py --data data/failovers.yaml --output failover_policies --label failover-policy
+        run: |
+          if python scripts/scrape_source_refs.py --data data/failovers.yaml --output failover_policies --label failover-policy; then
+            echo "artifact=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "artifact=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check at least one scraper succeeded
+        id: scrape_gate
+        run: |
+          failed=()
+          [ "${{ steps.scrape_changelogs.outputs.artifact }}" = "true" ] || failed+=("changelogs")
+          [ "${{ steps.scrape_retries.outputs.artifact }}" = "true" ] || failed+=("retries")
+          [ "${{ steps.scrape_failovers.outputs.artifact }}" = "true" ] || failed+=("failovers")
+
+          # Emit a JSON array of failed scraper names for downstream steps.
+          if [ ${#failed[@]} -eq 0 ]; then
+            failed_json="[]"
+          else
+            failed_json=$(printf '"%s",' "${failed[@]}")
+            failed_json="[${failed_json%,}]"
+          fi
+          echo "failed_scrapers=${failed_json}" >> "$GITHUB_OUTPUT"
+
+          if [ ${#failed[@]} -lt 3 ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::error::All scrape steps failed; skipping commit."
+          fi
 
       - name: Scrape Rust public API from docs.rs (drift detection)
         env:
@@ -45,9 +88,37 @@ jobs:
         continue-on-error: true
 
       - name: Generate parity snapshot
+        if: steps.scrape_gate.outputs.ok == 'true'
         run: python scripts/generate_snapshot.py
 
+      - name: Write last-run heartbeat
+        if: always()
+        env:
+          SCRAPE_OK: ${{ steps.scrape_gate.outputs.ok }}
+          FAILED_SCRAPERS: ${{ steps.scrape_gate.outputs.failed_scrapers }}
+        run: |
+          mkdir -p data/scraped
+          timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if [ "${SCRAPE_OK}" = "true" ]; then
+            success="true"
+          else
+            success="false"
+          fi
+          failed="${FAILED_SCRAPERS:-[]}"
+          cat > data/scraped/last_successful_run.json <<EOF
+          {
+            "timestamp": "${timestamp}",
+            "success": ${success},
+            "failed_scrapers": ${failed},
+            "run_id": "${{ github.run_id }}",
+            "run_started_at": "${timestamp}",
+            "commit_sha": "${{ github.sha }}",
+            "git_ref": "${{ github.ref }}"
+          }
+          EOF
+
       - name: Commit updated data
+        if: steps.scrape_gate.outputs.ok == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -55,9 +126,23 @@ jobs:
           git diff --staged --quiet || git commit -m "chore: update SDK parity data $(date -I)"
           git push
 
+      - name: Commit heartbeat on scraper failure
+        if: always() && steps.scrape_gate.outputs.ok != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/scraped/last_successful_run.json
+          git diff --staged --quiet || git commit -m "chore: record failed scraper heartbeat $(date -I)"
+          git push
+
+      - name: Fail job when all scrapers failed
+        if: steps.scrape_gate.outputs.ok != 'true'
+        run: exit 1
+
   build-and-deploy:
     needs: update-data
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
