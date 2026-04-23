@@ -1,0 +1,56 @@
+name: Push tier labels to linked issues
+
+# Manually dispatched only — we do not want automatic writes into external
+# repos on every merge. Run this after a tier change lands on main.
+#
+# Requires repository secret ISSUE_WRITE_TOKEN: a PAT (classic or
+# fine-grained) with `issues:write` on each target repo referenced from
+# data/features.yaml (currently Azure/azure-sdk-for-{net,java,python,go,rust}).
+# The default GITHUB_TOKEN cannot write cross-repo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Actually mutate issues (default: dry run)"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install pyyaml
+
+      - name: Push (dry run)
+        if: inputs.apply != 'true'
+        env:
+          ISSUE_WRITE_TOKEN: ${{ secrets.ISSUE_WRITE_TOKEN }}
+        run: |
+          python scripts/push_tiers_to_issues.py || code=$?; true
+          # Exit 2 = dry-run changes proposed. Surface as success but warn.
+          if [ "${code:-0}" = "2" ]; then
+            echo "::warning::Changes proposed. Re-run with apply=true to push."
+            exit 0
+          fi
+          exit "${code:-0}"
+
+      - name: Push (apply)
+        if: inputs.apply == 'true'
+        env:
+          ISSUE_WRITE_TOKEN: ${{ secrets.ISSUE_WRITE_TOKEN }}
+        run: python scripts/push_tiers_to_issues.py --apply

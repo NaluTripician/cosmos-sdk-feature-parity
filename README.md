@@ -124,6 +124,27 @@ tier_label_map:
 
 Omitting the map falls back to the defaults shown above.
 
+### Pushing tier labels to linked issues
+
+`scripts/push_tiers_to_issues.py` propagates the configured `tier_label_map`
+labels plus any per-issue `labels` onto the linked GitHub issues. It is
+*additive by default* and only removes labels it manages (the union of
+`tier_label_map` values and every string that appears in any
+`issues[].labels`). Repo-native labels on the target issue are left alone.
+
+```powershell
+python scripts/push_tiers_to_issues.py              # dry run
+python scripts/push_tiers_to_issues.py --apply      # actually mutate
+```
+
+Cross-repo writes need a PAT in `ISSUE_WRITE_TOKEN` (classic token with
+`repo` scope, or a fine-grained token with `issues:write` on every target
+repo — currently the `Azure/azure-sdk-for-*` family). The built-in
+`GITHUB_TOKEN` cannot write to external repos.
+
+The `.github/workflows/push-tier-labels.yml` workflow wraps this as a
+manual dispatch (`apply=false/true`) so changes land with an audit trail.
+
 Example:
 
 ```yaml
