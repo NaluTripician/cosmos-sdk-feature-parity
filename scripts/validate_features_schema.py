@@ -24,6 +24,16 @@ Per-SDK cells MAY additionally include:
         issues:                                # non-empty list if present
           - url: https://github.com/Azure/azure-sdk-for-rust/issues/1234
             title: "Optional human-friendly label"
+            labels:                            # optional; non-empty list of strings if present.
+              - "parity/rust-ga"               # Propagated to the issue by the tier
+                                               # write-back workflow (see follow-up).
+
+The document root MAY additionally include:
+
+    tier_label_map:                            # optional; keys must be valid tiers,
+      ga_blocker: parity/ga-blocker            # values must be non-empty strings.
+      post_ga: parity/post-ga                  # Used by the tier -> label write-back
+      nice_to_have: parity/nice-to-have        # workflow to configure label names.
 
 Empty lists are treated as validation errors (equivalent to a missing
 field — if the author has nothing to say, they should omit the key).
@@ -102,11 +112,47 @@ def _validate_issues(
         if title is not None and not isinstance(title, str):
             _err(errors, feature_id,
                  f"sdks.{sdk_id}.issues[{idx}].title must be a string if set")
-        unknown = set(item.keys()) - {"url", "title"}
+        if "labels" in item:
+            labels = item["labels"]
+            if not isinstance(labels, list):
+                _err(errors, feature_id,
+                     f"sdks.{sdk_id}.issues[{idx}].labels must be a list "
+                     f"of strings")
+            elif len(labels) == 0:
+                _err(errors, feature_id,
+                     f"sdks.{sdk_id}.issues[{idx}].labels must not be empty; "
+                     f"omit the key instead")
+            elif not all(isinstance(x, str) and x.strip() for x in labels):
+                _err(errors, feature_id,
+                     f"sdks.{sdk_id}.issues[{idx}].labels must be a list of "
+                     f"non-empty strings")
+        unknown = set(item.keys()) - {"url", "title", "labels"}
         if unknown:
             _err(errors, feature_id,
                  f"sdks.{sdk_id}.issues[{idx}] has unknown key(s): "
                  f"{sorted(unknown)}")
+
+
+def _validate_tier_label_map(errors: list[str], value: object) -> None:
+    if not isinstance(value, dict):
+        errors.append("tier_label_map must be a mapping")
+        return
+    if not value:
+        errors.append(
+            "tier_label_map must not be empty; omit the key instead"
+        )
+        return
+    for tier, label in value.items():
+        if tier not in VALID_TIERS:
+            errors.append(
+                f"tier_label_map has unknown tier '{tier}' "
+                f"(expected one of {sorted(VALID_TIERS)})"
+            )
+            continue
+        if not isinstance(label, str) or not label.strip():
+            errors.append(
+                f"tier_label_map.{tier} must be a non-empty string"
+            )
 
 
 def _validate_sdk_keyed_list_of_strings(
@@ -224,6 +270,8 @@ def main() -> int:
     if not isinstance(data, dict) or "categories" not in data:
         errors.append("features.yaml must be a mapping with a top-level 'categories' list")
     else:
+        if "tier_label_map" in data:
+            _validate_tier_label_map(errors, data["tier_label_map"])
         cats = data["categories"]
         if not isinstance(cats, list):
             errors.append("'categories' must be a list")

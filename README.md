@@ -105,10 +105,24 @@ Each per-SDK cell may additionally carry two classification / tracking fields:
   this to split "real" GA blockers from features intentionally deferred
   past GA (e.g. Rust Change Feed Processor is tagged `tier: post_ga`).
 - `issues` — a non-empty list of tracking-issue objects, each
-  `{ url: <gh-issue-url>, title?: <string> }`. Rendered as 🐛 chips in the
-  matrix. The URL must be `http://` or `https://`; beyond that no format
-  check is enforced (GitHub issues, ADO work items, internal trackers all
-  work).
+  `{ url: <gh-issue-url>, title?: <string>, labels?: [<string>, ...] }`.
+  Rendered as 🐛 chips in the matrix. The URL must be `http://` or
+  `https://`; beyond that no format check is enforced (GitHub issues, ADO
+  work items, internal trackers all work). The optional `labels` list is
+  consumed by the tier → label write-back workflow and propagated to the
+  linked GitHub issue; label strings must be non-empty.
+
+Label names for the three tiers can be configured at the root of
+`features.yaml`:
+
+```yaml
+tier_label_map:
+  ga_blocker: parity/ga-blocker
+  post_ga: parity/post-ga
+  nice_to_have: parity/nice-to-have
+```
+
+Omitting the map falls back to the defaults shown above.
 
 Example:
 
@@ -119,6 +133,8 @@ rust:
   issues:
     - url: https://github.com/Azure/azure-sdk-for-rust/issues/1234
       title: "Track Change Feed Processor post-GA"
+      labels:
+        - parity/rust-post-ga
 ```
 
 ## Assessment Hints
