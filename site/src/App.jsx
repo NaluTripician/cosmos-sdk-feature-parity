@@ -370,7 +370,7 @@ export default function App() {
             )}
           </div>
           <a
-            href="./CONTRIBUTING.md"
+            href="https://github.com/NaluTripician/cosmos-sdk-feature-parity/blob/main/CONTRIBUTING.md"
             target="_blank"
             rel="noopener noreferrer"
             className="shrink-0 inline-flex items-center gap-1 bg-white/10 hover:bg-white/20 border border-white/30 text-white text-sm font-medium px-3 py-1.5 rounded-md transition-colors"
