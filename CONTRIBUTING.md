@@ -65,11 +65,23 @@ Quick summary:
   issues:
     - url: https://github.com/Azure/azure-sdk-for-rust/issues/1234
       title: "Add Change Feed Processor"   # optional
+      labels:                               # optional; non-empty list of
+        - parity/rust-post-ga               # strings. Consumed by the
+                                            # tier -> label write-back
+                                            # workflow to sync custom
+                                            # labels beyond the tier one.
   ```
   Rendered as 🐛 chips in the parity matrix and GA Readiness view.
-  **Issue-label propagation** (mirroring `tier` onto the linked GitHub
-  issue) is a planned follow-up and requires write credentials — for now
-  this is a one-way read-only link.
+  **Issue-label propagation** — the tier → `parity/*` label write-back
+  workflow reads `tier` (and optional `issues[].labels`) and ensures the
+  linked GitHub issue carries matching labels. Label names for the three
+  tiers can be overridden at the root of `features.yaml`:
+  ```yaml
+  tier_label_map:
+    ga_blocker: parity/ga-blocker
+    post_ga: parity/post-ga
+    nice_to_have: parity/nice-to-have
+  ```
 
 Bump the `# Last updated:` comment at the top of `features.yaml` when you
 land a change.
