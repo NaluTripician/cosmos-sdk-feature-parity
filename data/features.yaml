@@ -1,5 +1,5 @@
 # Cosmos DB SDK Feature Parity Matrix
-# Last updated: 2026-04-23 (reclassified Rust Fault Injection as ga; opt-in via Cargo feature flag)
+# Last updated: 2026-04-23 (audited against upstream SDK CHANGELOGs; Rust Availability & Resiliency reconciled against azure_data_cosmos source)
 #
 # Status values:
 #   ga           - Generally Available
@@ -239,7 +239,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "ga", since: "1.0.0" }
-          rust: { status: "ga", since: "0.31.0" }
+          rust: { status: "ga", since: "0.29.0", notes: "CosmosClientBuilder::with_application_region (options/mod.rs::CosmosClientOptions.application_region, clients/cosmos_client_builder.rs) generates a proximity-ordered preferred-region list via region_proximity::generate_preferred_region_list; added in 0.29.0 (#3274), with_application_preferred_regions replaced by with_application_region in 0.31.0 (#3796). The per-region ordered list is not user-supplied." }
 
       - id: multi_region_writes
         name: "Multi-Region Writes"
@@ -249,7 +249,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "ga", since: "1.4.1" }
-          rust: { status: "ga", since: "0.31.0", notes: "Basic support" }
+          rust: { status: "ga", since: "0.31.0", notes: "Basic multi-region writes (#3482, #3495). routing/location_cache.rs::can_support_multiple_write_locations enables tentative writes (ALLOW_TENTATIVE_WRITES header set in retry_policies/client_retry_policy.rs::before_send_request) for Documents and StoredProcedures.Execute when account exposes >1 write endpoint." }
 
       - id: cross_region_hedging
         name: "Cross-Region Hedging / Availability Strategy"
@@ -259,7 +259,7 @@ categories:
           java: { status: "ga", since: "4.53.0", notes: "EndToEndOperationLatencyPolicyConfig.availabilityStrategy introduced around 4.53.0 (PR #37511)." }
           python: { status: "ga", since: "4.15.0" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", notes: "No AvailabilityStrategy / hedging code in sdk/cosmos/azure_data_cosmos as of 0.31.0 (code search for 'hedging' / 'availability_strategy' returns zero results)." }
 
       - id: ppaf
         name: "Per-Partition Automatic Failover (PPAF)"
@@ -269,7 +269,7 @@ categories:
           java: { status: "ga", since: "4.69.0", notes: "Per-Partition Automatic Failover first appears around 4.69.0." }
           python: { status: "ga", since: "4.15.0" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", notes: "PPAF logic exists in routing/global_partition_endpoint_manager.rs (partition_level_automatic_failover_enabled flag, partition_key_range_to_location_for_write map) and retry_policies/client_retry_policy.rs (try_mark_endpoint_unavailable_for_pk_range on 403/3, is_request_eligible_for_per_partition_automatic_failover), but clients/cosmos_client_builder.rs hard-codes GlobalPartitionEndpointManager::new(gem, false, true) → PPAF disabled at build and not exposed on CosmosClientOptions." }
 
       - id: per_partition_circuit_breaker
         name: "Per-Partition Circuit Breaker"
@@ -279,7 +279,7 @@ categories:
           java: { status: "ga", since: "4.63.1", notes: "Circuit breaker exception-tolerance fix in 4.63.1 (PR #41428)." }
           python: { status: "preview", since: "4.13.0b1" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "preview", since: "0.30.0", notes: "Partition-level circuit breaker is implemented and hard-enabled by the builder in clients/cosmos_client_builder.rs via GlobalPartitionEndpointManager::new(gem, false, true). Defaults in routing/global_partition_endpoint_manager.rs: consecutive read-failure threshold = 2, write = 5, reset window = 5 min (DEFAULT_CIRCUIT_BREAKER_* constants). No CosmosClientOptions toggle or doc-published API; marked preview as the capability is not opt-in/opt-out configurable. Introduced alongside GEM/LocationCache in 0.30.0." }
 
       - id: n_region_sync_commit
         name: "N-Region Synchronous Commit"
@@ -289,7 +289,7 @@ categories:
           java: { status: "ga", since: "4.79.0", notes: "Added in 4.79.0 (PR #47757)." }
           python: { status: "not_started" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", notes: "No N-region synchronous commit / IServiceConfigurationReader-equivalent in sdk/cosmos/azure_data_cosmos source as of 0.31.0." }
 
       - id: excluded_regions
         name: "Excluded Regions"
@@ -299,7 +299,7 @@ categories:
           java: { status: "ga", since: "4.51.0", notes: "CosmosClientBuilder#excludedRegionSupplier and CosmosExcludedRegions added in 4.51.0 (PR #36616)." }
           python: { status: "ga", since: "4.12.0" }
           go: { status: "not_started" }
-          rust: { status: "ga", since: "0.31.0" }
+          rust: { status: "ga", since: "0.31.0", notes: "Per-request only: ItemOptions::with_excluded_regions (options/mod.rs, added in 0.31.0 via #3602) is routed through CosmosRequest.excluded_regions into LocationCache::get_applicable_endpoints. Client-level excluded_regions on CosmosClientOptions was removed in 0.31.0 (#3744); only application_region, user_agent_suffix, and custom_headers remain on that struct." }
 
   - name: "Change Feed"
     features:

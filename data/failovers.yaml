@@ -1,5 +1,5 @@
 # Cosmos DB SDK Multi-Region / Failover Behavior Matrix
-# Last audited: 2026-04-22
+# Last audited: 2026-04-23
 #
 # Status values:
 #   supported     - Feature is implemented and exposed via public API
@@ -23,7 +23,7 @@
 # `audit_refs` weekly and writes data/scraped/failover_drift.md when any file's
 # SHA-256 changes, so curators can re-audit.
 
-last_audited: "2026-04-22"
+last_audited: "2026-04-23"
 
 sdks:
   dotnet:
@@ -50,7 +50,7 @@ sdks:
     connection_modes: [gateway]
     repo: Azure/azure-sdk-for-rust
     default_branch: main
-    global_endpoint_manager: "sdk/cosmos/azure_data_cosmos/src/pipeline/mod.rs"
+    global_endpoint_manager: "sdk/cosmos/azure_data_cosmos/src/routing/global_endpoint_manager.rs"
 
 # Pinned source files watched for drift. Paths must exist at HEAD of each
 # SDK's default branch or the scraper will flag them as errors.
@@ -76,7 +76,12 @@ audit_refs:
     - "sdk/data/azcosmos/cosmos_client_retry_policy.go"
   rust:
     - "sdk/cosmos/azure_data_cosmos/src/clients/cosmos_client.rs"
-    - "sdk/cosmos/azure_data_cosmos/src/pipeline/mod.rs"
+    - "sdk/cosmos/azure_data_cosmos/src/clients/cosmos_client_builder.rs"
+    - "sdk/cosmos/azure_data_cosmos/src/routing/global_endpoint_manager.rs"
+    - "sdk/cosmos/azure_data_cosmos/src/routing/location_cache.rs"
+    - "sdk/cosmos/azure_data_cosmos/src/routing/global_partition_endpoint_manager.rs"
+    - "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs"
+    - "sdk/cosmos/azure_data_cosmos/src/options/mod.rs"
 
 # ---------------------------------------------------------------------------
 # Categories & scenarios. Cells are `unknown` until a per-SDK audit fills them
@@ -116,12 +121,11 @@ categories:
             source_ref: null
             notes: "Needs audit: verify whether azcosmos exposes a preferred-regions list; likely limited."
           rust:
-            status: unknown
-            api: "unknown"
-            configurable: false
-            source_ref: null
-            notes: "Preview SDK — needs audit."
-
+            status: supported
+            api: "CosmosClientBuilder::with_application_region(RegionName)"
+            configurable: true
+            source_ref: "sdk/cosmos/azure_data_cosmos/src/clients/cosmos_client_builder.rs"
+            notes: "Single-region input; SDK generates ordered preferred list by geographic proximity via region_proximity::generate_preferred_region_list (CHANGELOG 0.29.0 #3274, 0.31.0 #3796). No user-supplied ordered list API. CosmosClientOptions.application_region is the only region-routing field on the options struct (options/mod.rs)."
       - id: empty_list_default
         name: "Default when preferred list is empty"
         description: "Which region the client uses if no preferred regions are configured."
@@ -130,8 +134,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: unknown, notes: "Needs audit." }
-          rust: { status: unknown, notes: "Needs audit." }
-
+          rust: { status: supported, notes: "routing/location_cache.rs::LocationCache::new starts with empty preferred_locations; update()/on_database_account_read populates preferred_locations from readable_locations in account metadata. If no regions are configured yet, resolve_service_endpoint falls back to default_endpoint (hub)." }
       - id: account_metadata_poll_interval
         name: "Account metadata poll interval"
         description: "How often the global endpoint manager refreshes account region metadata."
@@ -155,8 +158,7 @@ categories:
             source_ref: "sdk/cosmos/azure-cosmos/azure/cosmos/_global_endpoint_manager.py"
             notes: "refresh_time_interval_in_ms; verify during audit."
           go: { status: unknown, notes: "Needs audit." }
-          rust: { status: unknown, notes: "Needs audit." }
-
+          rust: { status: supported, default: "10 minutes", configurable: false, source_ref: "sdk/cosmos/azure_data_cosmos/src/routing/global_endpoint_manager.rs", notes: "AsyncCache TTL = Duration::from_secs(600) in GlobalEndpointManager::new; refresh_location(false) is a no-op while TTL is fresh, triggers fetch on expiry. Not exposed on CosmosClientOptions." }
       - id: manual_refresh_api
         name: "Manual refresh API"
         description: "Public API to force-refresh endpoint topology (e.g., for tests or game days)."
@@ -165,8 +167,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: unknown, notes: "Needs audit." }
-          rust: { status: unknown, notes: "Needs audit." }
-
+          rust: { status: not_started, notes: "GlobalEndpointManager::refresh_location(force_refresh) exists (routing/global_endpoint_manager.rs) but GEM is pub(crate); CosmosClient in clients/cosmos_client.rs exposes no public refresh method." }
   - id: write_endpoint
     name: "Write endpoint resolution"
     scenarios:
@@ -178,8 +179,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: unknown, notes: "Needs audit." }
-          rust: { status: unknown, notes: "Needs audit." }
-
+          rust: { status: supported, source_ref: "sdk/cosmos/azure_data_cosmos/src/routing/location_cache.rs", notes: "LocationCache::resolve_service_endpoint routes to first account_write_locations entry when can_support_multiple_write_locations() is false (single-master), modulo location_index_to_route." }
       - id: multi_write_account
         name: "Multi-write account: write region election"
         description: "How the write endpoint is chosen when the account supports multi-region writes."
@@ -188,8 +188,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: unknown, notes: "Needs audit." }
-          rust: { status: unknown, notes: "Needs audit." }
-
+          rust: { status: supported, source_ref: "sdk/cosmos/azure_data_cosmos/src/routing/location_cache.rs", notes: "can_support_multiple_write_locations = write_endpoints.len() > 1 AND (Documents OR StoredProcedures.Execute). When true, retry_policies/client_retry_policy.rs::before_send_request sets ALLOW_TENTATIVE_WRITES header; write picks next preferred write endpoint via get_applicable_endpoints(Write). Basic multi-region writes enabled in 0.31.0 (#3482, #3495)." }
       - id: write_region_change_detection
         name: "Detection of write region change"
         description: "How the client notices a write region change (e.g., after failover) and invalidates cache."
@@ -198,8 +197,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: unknown, notes: "Needs audit." }
-          rust: { status: unknown, notes: "Needs audit." }
-
+          rust: { status: supported, source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs", notes: "403.3 (WRITE_FORBIDDEN) in should_retry_on_http_status calls should_retry_on_endpoint_failure(force_refresh=true); that path marks the endpoint unavailable for writes, triggers refresh_location(true) against the hub, and retries on next preferred write region. PPAF path (try_mark_endpoint_unavailable_for_partition_key_range) is also wired but off by default." }
   - id: read_endpoint
     name: "Read endpoint resolution"
     scenarios:
@@ -211,8 +209,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: unknown, notes: "Needs audit." }
-          rust: { status: unknown, notes: "Needs audit." }
-
+          rust: { status: supported, source_ref: "sdk/cosmos/azure_data_cosmos/src/routing/location_cache.rs", notes: "refresh_endpoints()/get_preferred_available_endpoints() intersect preferred_locations (proximity-ordered) with account_read_endpoints_by_location; available endpoints first, unavailable (within 5-min window) pushed to the end, then default_endpoint as fallback." }
       - id: read_fallback_on_outage
         name: "Read fallback on region outage"
         description: "What triggers cross-region read failover and what does not."
@@ -221,8 +218,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: unknown, notes: "Needs audit." }
-          rust: { status: unknown, notes: "Needs audit." }
-
+          rust: { status: supported, source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs", notes: "For read-only ops, any status not in is_non_retryable_status_code triggers should_retry_on_unavailable_endpoint_status_codes (iterate applicable endpoints minus excluded_regions). 503, 500, 410/1022, Io/Connection errors, and NotSent (connection) errors also fall over. Added alongside GEM/LocationCache in 0.30.0 and broadened in 0.31.0 (CHANGELOG 0.31.0 #3728: 'retry reads on all non-whitelisted status codes')." }
       - id: session_routing_after_write_move
         name: "Session routing after write region move"
         description: "Whether session-consistent reads follow a moved write region correctly."
@@ -231,8 +227,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: unknown, notes: "Needs audit." }
-          rust: { status: unknown, notes: "Needs audit." }
-
+          rust: { status: unknown, notes: "404.1022 (READ_SESSION_NOT_AVAILABLE) handled by should_retry_on_session_not_available in retry_policies/client_retry_policy.rs (tries each write endpoint for multi-write, primary write region once for single-write). Session tokens are passed through as ItemOptions.session_token headers (options/mod.rs), but the SDK has no explicit LocationCache::update_session_token equivalent; end-to-end behavior after a write-region move needs live validation." }
   - id: cross_region_retry
     name: "Regional failover on request failures"
     scenarios:
@@ -257,9 +252,9 @@ categories:
             notes: "azcosmos currently does not implement client-side cross-region retry (falls through to azcore)."
             source_ref: "sdk/data/azcosmos/cosmos_client_retry_policy.go"
           rust:
-            status: not_started
-            notes: "Preview SDK — no cross-region retry logic yet; needs audit to confirm."
-
+            status: supported
+            notes: "Triggers in retry_policies/client_retry_policy.rs::should_retry_on_http_status: 403/3 WRITE_FORBIDDEN, 404/1022 READ_SESSION_NOT_AVAILABLE, 410/1022 LEASE_NOT_FOUND, 503 ServiceUnavailable, 429/3092 SYSTEM_RESOURCE_NOT_AVAILABLE (multi-write only), plus any non-whitelisted status for reads. Transport: NotSent errors retry both reads and writes; Io/Connection on sent requests retry reads only. Added in 0.30.0 (CHANGELOG 'Added GlobalEndpointManager, LocationCache to support Cross Regional Retry'); broadened in 0.31.0 (#3728)."
+            source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs"
       - id: region_retry_budget
         name: "Cross-region retry budget"
         description: "Max regions attempted, per-call or per-client, and any time cap."
@@ -268,8 +263,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: not_supported, notes: "Not applicable: no cross-region retry." }
-          rust: { status: unknown, notes: "Needs audit." }
-
+          rust: { status: supported, source_ref: "sdk/cosmos/azure_data_cosmos/src/retry_policies/client_retry_policy.rs", notes: "MAX_RETRY_COUNT_ON_ENDPOINT_FAILURE = 120 failovers/request; MAX_RETRY_COUNT_ON_CONNECTION_FAILURE = 3 on same endpoint before marking unavailable. Service-unavailable and session-not-available retries cap at applicable_endpoints().len(). No total wall-clock cap." }
       - id: unhealthy_region_eviction
         name: "Unhealthy region marking & eviction"
         description: "Does a failed read region get marked unhealthy, and after what timeout is it reconsidered?"
@@ -278,8 +272,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: not_supported, notes: "Not tracked." }
-          rust: { status: unknown, notes: "Needs audit." }
-
+          rust: { status: supported, source_ref: "sdk/cosmos/azure_data_cosmos/src/routing/location_cache.rs", notes: "LocationCache::mark_endpoint_unavailable records in location_unavailability_info_map with timestamp + RequestOperation(Read/Write/All); is_endpoint_unavailable treats entries older than DEFAULT_EXPIRATION_TIME (5 minutes) as healthy again. refresh_endpoints() reorders lists so unavailable endpoints trail." }
   - id: ppaf
     name: "Per-Partition Automatic Failover (PPAF)"
     scenarios:
@@ -304,8 +297,8 @@ categories:
             notes: "Not present in azcosmos."
           rust:
             status: not_started
-            notes: "Not present in preview SDK."
-
+            notes: "PPAF machinery exists in routing/global_partition_endpoint_manager.rs (partition_level_automatic_failover_enabled flag, partition_key_range_to_location_for_write map, try_mark_endpoint_unavailable_for_partition_key_range) and is wired into retry_policies/client_retry_policy.rs (403/3 path, try_mark_endpoint_unavailable_for_pk_range), but clients/cosmos_client_builder.rs constructs GlobalPartitionEndpointManager::new(gem, false, true) → PPAF hard-disabled at build time. Not exposed on CosmosClientOptions."
+            source_ref: "sdk/cosmos/azure_data_cosmos/src/clients/cosmos_client_builder.rs"
       - id: ppaf_failback_criteria
         name: "PPAF failback criteria"
         description: "What probe success count / cooldown allows traffic to return to a previously unhealthy region."
@@ -314,8 +307,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: not_started }
-          rust: { status: not_started }
-
+          rust: { status: not_started, notes: "Failback loop exists in routing/global_partition_endpoint_manager.rs (initiate_circuit_breaker_failback_loop, DEFAULT_ALLOWED_PARTITION_UNAVAILABILITY_DURATION_SECS = 5s, DEFAULT_STALE_PARTITION_UNAVAILABILITY_REFRESH_INTERVAL_SECS = 300s, env-var overrides AZURE_COSMOS_ALLOWED_PARTITION_UNAVAILABILITY_DURATION_IN_SECONDS / AZURE_COSMOS_PPCB_STALE_PARTITION_UNAVAILABILITY_REFRESH_INTERVAL_IN_SECONDS) but PPAF itself is disabled by default (see ppaf_implemented)." }
       - id: ppaf_observability
         name: "PPAF observability"
         description: "Diagnostics fields and metrics emitted when a PK-range failover occurs."
@@ -324,8 +316,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: not_started }
-          rust: { status: not_started }
-
+          rust: { status: not_started, notes: "routing/global_partition_endpoint_manager.rs emits tracing::info!/error! on failover/failback; no structured diagnostic API on CosmosClient or CosmosResponse, and PPAF is disabled by default." }
   - id: circuit_breaker
     name: "Client-side circuit breaker"
     scenarios:
@@ -349,8 +340,9 @@ categories:
           go:
             status: not_started
           rust:
-            status: not_started
-
+            status: partial
+            notes: "Partition-level circuit breaker is implemented and hard-enabled by the builder: clients/cosmos_client_builder.rs calls GlobalPartitionEndpointManager::new(gem, false, true) — second bool is partition_level_circuit_breaker_enabled. Request-eligibility path is is_request_eligible_for_partition_level_circuit_breaker + increment_request_failure_counter_and_check_if_partition_can_failover in retry_policies/client_retry_policy.rs. No CosmosClientOptions toggle; introduced in 0.30.0 alongside GEM."
+            source_ref: "sdk/cosmos/azure_data_cosmos/src/routing/global_partition_endpoint_manager.rs"
       - id: circuit_breaker_thresholds
         name: "Breaker open thresholds"
         description: "What opens the breaker (error classes, consecutive count, time window)."
@@ -359,8 +351,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: not_started }
-          rust: { status: not_started }
-
+          rust: { status: partial, source_ref: "sdk/cosmos/azure_data_cosmos/src/routing/global_partition_endpoint_manager.rs", notes: "DEFAULT_CIRCUIT_BREAKER_CONSECUTIVE_FAILURE_COUNT_FOR_READS = 2, DEFAULT_CIRCUIT_BREAKER_CONSECUTIVE_FAILURE_COUNT_FOR_WRITES = 5, DEFAULT_CIRCUIT_BREAKER_TIMEOUT_COUNTER_RESET_WINDOW_MINS = 5. Not user-configurable." }
       - id: circuit_breaker_granularity
         name: "Breaker granularity"
         description: "Per-endpoint, per-partition, or per-request-type."
@@ -369,8 +360,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: not_started }
-          rust: { status: not_started }
-
+          rust: { status: partial, source_ref: "sdk/cosmos/azure_data_cosmos/src/routing/global_partition_endpoint_manager.rs", notes: "Per-partition-key-range, split by operation class (partition_key_range_to_location_for_write for writes in single-master; partition_key_range_to_location_for_read_and_write for reads in single-master and both ops in multi-master)." }
   - id: availability_strategy
     name: "Availability strategy / hedging"
     scenarios:
@@ -397,7 +387,7 @@ categories:
             status: not_started
           rust:
             status: not_started
-
+            notes: "No AvailabilityStrategy / hedging code in sdk/cosmos/azure_data_cosmos as of 0.31.0 (code search for 'hedging' and 'availability_strategy' returns zero matches; CosmosClientOptions has no hedging field)."
       - id: hedging_threshold_config
         name: "Hedging threshold configuration"
         description: "API and default threshold/step values."
@@ -406,8 +396,7 @@ categories:
           java: { status: unknown, notes: "Default typically 500ms threshold, 100ms step — confirm." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: not_started }
-          rust: { status: not_started }
-
+          rust: { status: not_started, notes: "n/a — no hedging implementation (see hedging_supported)." }
       - id: hedging_applies_to_writes
         name: "Hedging applies to idempotent writes?"
         description: "Whether the strategy hedges non-read operations."
@@ -416,8 +405,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: not_started }
-          rust: { status: not_started }
-
+          rust: { status: not_started, notes: "n/a — no hedging implementation (see hedging_supported)." }
   - id: region_exclusion
     name: "Region exclusion / blacklist"
     scenarios:
@@ -437,8 +425,7 @@ categories:
             source_ref: "sdk/cosmos/azure-cosmos/src/main/java/com/azure/cosmos/CosmosClientBuilder.java"
           python: { status: unknown, notes: "Needs audit: may be named excluded_locations." }
           go: { status: not_started, notes: "Not exposed." }
-          rust: { status: not_started, notes: "Not exposed." }
-
+          rust: { status: partial, api: "ItemOptions::with_excluded_regions(Vec<RegionName>)", source_ref: "sdk/cosmos/azure_data_cosmos/src/options/mod.rs", notes: "Per-request only: ItemOptions.excluded_regions (added 0.31.0 #3602) is plumbed through CosmosRequest.excluded_regions into LocationCache::get_applicable_endpoints. Client-level excluded_regions was REMOVED from CosmosClientOptions in 0.31.0 (#3744); CosmosClientBuilder passes an empty Vec to GlobalEndpointManager::new, and client_excluded_regions on LocationCache is unreachable from public API." }
   - id: gem_internals
     name: "Global endpoint manager internals"
     scenarios:
@@ -450,8 +437,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: unknown, notes: "Needs audit." }
-          rust: { status: unknown, notes: "Needs audit." }
-
+          rust: { status: supported, source_ref: "sdk/cosmos/azure_data_cosmos/src/routing/global_endpoint_manager.rs", notes: "GlobalEndpointManager::get_database_account issues OperationType::Read against ResourceLink::root(ResourceType::DatabaseAccount) using the resolved service endpoint (falls back to default_endpoint / hub). Called from refresh_location under a 10-min AsyncCache TTL." }
       - id: poll_failure_backoff
         name: "Poll failure backoff"
         description: "Backoff behavior when the metadata poll fails."
@@ -460,8 +446,7 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: unknown, notes: "Needs audit." }
-          rust: { status: unknown, notes: "Needs audit." }
-
+          rust: { status: unknown, notes: "routing/global_endpoint_manager.rs::refresh_location swallows errors with '_ = ... .await' and logs via tracing; the AsyncCache retains no failure record, so the next caller after TTL re-attempts without structured backoff. No explicit retry policy on the poll path — behavior under repeated outages needs live validation." }
       - id: bootstrap_behavior
         name: "Initial bootstrap behavior"
         description: "Blocking vs. eager async on first account metadata fetch."
@@ -470,4 +455,4 @@ categories:
           java: { status: unknown, notes: "Needs audit." }
           python: { status: unknown, notes: "Needs audit." }
           go: { status: unknown, notes: "Needs audit." }
-          rust: { status: unknown, notes: "Needs audit." }
+          rust: { status: supported, source_ref: "sdk/cosmos/azure_data_cosmos/src/clients/cosmos_client_builder.rs", notes: "CosmosClientBuilder::build() is async (0.31.0 CHANGELOG: 'Made CosmosClientBuilder::build() and DatabaseClient::container_client() async to prepare for future cache population'). Currently does not eagerly fetch account metadata — GlobalEndpointManager starts with empty endpoint lists and is populated lazily on the first request via ClientRetryPolicy::before_send_request → refresh_location(false). First request therefore blocks on bootstrap." }
