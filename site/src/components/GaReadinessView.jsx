@@ -13,6 +13,47 @@ const STATUS_CONFIG = {
 const LAGGING_STATUSES = new Set(['not_started', 'in_progress', 'planned'])
 const NEAR_GA_STATUSES = new Set(['preview'])
 
+const TIER_CONFIG = {
+  ga_blocker: { label: 'GA blocker', icon: '🚧', bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-300' },
+  post_ga: { label: 'Post-GA', icon: '⏭️', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300' },
+  nice_to_have: { label: 'Nice-to-have', icon: '✨', bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200' },
+}
+
+function TierChip({ tier }) {
+  const c = TIER_CONFIG[tier]
+  if (!c) return null
+  return (
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${c.bg} ${c.text} ${c.border}`}>
+      <span>{c.icon}</span><span>{c.label}</span>
+    </span>
+  )
+}
+
+function IssueChips({ issues }) {
+  if (!issues || issues.length === 0) return null
+  return (
+    <div className="inline-flex flex-wrap gap-0.5">
+      {issues.map((issue, idx) => {
+        const m = /github\.com\/[^/]+\/[^/]+\/issues\/(\d+)/.exec(issue.url || '')
+        const label = m ? `#${m[1]}` : '🐛'
+        const tip = issue.title ? `${label}: ${issue.title}` : issue.url
+        return (
+          <a
+            key={idx}
+            href={issue.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={tip}
+            className="inline-flex items-center px-1 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100"
+          >
+            🐛 {label}
+          </a>
+        )
+      })}
+    </div>
+  )
+}
+
 function StatusPill({ status }) {
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.not_started
   return (
@@ -40,7 +81,8 @@ function computeGaps(features, sdkOrder, targetSdk) {
   if (!features?.categories) return rows
   features.categories.forEach((category, catIdx) => {
     category.features.forEach(feature => {
-      const targetStatus = feature.sdks?.[targetSdk]?.status || 'not_started'
+      const targetCell = feature.sdks?.[targetSdk]
+      const targetStatus = targetCell?.status || 'not_started'
       if (!LAGGING_STATUSES.has(targetStatus)) return
       const otherGa = sdkOrder.filter(
         s => s !== targetSdk && feature.sdks?.[s]?.status === 'ga'
@@ -53,6 +95,8 @@ function computeGaps(features, sdkOrder, targetSdk) {
         targetStatus,
         otherGa,
         gaCount: otherGa.length,
+        tier: targetCell?.tier || null,
+        issues: Array.isArray(targetCell?.issues) ? targetCell.issues : [],
       })
     })
   })
@@ -83,15 +127,17 @@ function GapsTable({ rows, sdks, targetSdk }) {
             <th className="px-3 py-2 text-center text-sm font-semibold text-gray-600 whitespace-nowrap">
               {sdks[targetSdk]?.name} status
             </th>
+            <th className="px-3 py-2 text-center text-sm font-semibold text-gray-600 whitespace-nowrap">Tier</th>
             <th className="px-3 py-2 text-center text-sm font-semibold text-gray-600 whitespace-nowrap">GA on others</th>
             <th className="text-left px-3 py-2 text-sm font-semibold text-gray-600">SDKs at GA</th>
+            <th className="text-left px-3 py-2 text-sm font-semibold text-gray-600">Issues</th>
           </tr>
         </thead>
         <tbody>
           {byCategory.map(cat => (
             <React.Fragment key={cat.name}>
               <tr>
-                <td colSpan={5} className="bg-gray-100 px-3 py-2 text-sm font-bold text-gray-700 border-t border-gray-200">
+                <td colSpan={7} className="bg-gray-100 px-3 py-2 text-sm font-bold text-gray-700 border-t border-gray-200">
                   {cat.name}
                 </td>
               </tr>
@@ -100,12 +146,14 @@ function GapsTable({ rows, sdks, targetSdk }) {
                   <td className="px-3 py-2 text-sm font-medium text-gray-800">{row.feature.name}</td>
                   <td className="px-3 py-2 text-xs text-gray-600">{row.feature.description || ''}</td>
                   <td className="px-3 py-2 text-center"><StatusPill status={row.targetStatus} /></td>
+                  <td className="px-3 py-2 text-center">{row.tier ? <TierChip tier={row.tier} /> : <span className="text-gray-300 text-xs">—</span>}</td>
                   <td className="px-3 py-2 text-center text-sm font-semibold text-gray-700">{row.gaCount}</td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1">
                       {row.otherGa.map(s => <SdkPill key={s} sdk={sdks[s]} />)}
                     </div>
                   </td>
+                  <td className="px-3 py-2"><IssueChips issues={row.issues} /></td>
                 </tr>
               ))}
             </React.Fragment>
@@ -123,8 +171,12 @@ export default function GaReadinessView({ features, sdks, sdkOrder, targetSdk, o
     () => computeGaps(features, sdkOrder, targetSdk),
     [features, sdkOrder, targetSdk]
   )
-  const mustHaveGaps = allGaps.filter(r => r.gaCount >= 2)
-  const stretchGaps = allGaps.filter(r => r.gaCount === 1)
+  // `post_ga`-tiered cells are intentional post-GA deferrals (e.g. Rust CFP)
+  // — don't count them as GA blockers. Surface them in a separate section.
+  const deferredGaps = allGaps.filter(r => r.tier === 'post_ga')
+  const activeGaps = allGaps.filter(r => r.tier !== 'post_ga')
+  const mustHaveGaps = activeGaps.filter(r => r.gaCount >= 2)
+  const stretchGaps = activeGaps.filter(r => r.gaCount === 1)
 
   const copyPermalink = async () => {
     const url = new URL(window.location.href)
@@ -210,6 +262,25 @@ export default function GaReadinessView({ features, sdks, sdkOrder, targetSdk, o
           <GapsTable rows={stretchGaps} sdks={sdks} targetSdk={targetSdk} />
         )}
       </section>
+
+      {deferredGaps.length > 0 && (
+        <section className="mt-8">
+          <div className="flex items-baseline justify-between mb-2">
+            <h3 className="text-base font-semibold text-gray-700">
+              Post-GA (deferred by design)
+              <span className="ml-2 text-xs font-normal text-gray-500">
+                ({deferredGaps.length} feature{deferredGaps.length === 1 ? '' : 's'}, explicitly tagged <code className="bg-gray-100 px-1 rounded">tier: post_ga</code>)
+              </span>
+            </h3>
+          </div>
+          <p className="text-xs text-gray-500 mb-2">
+            These gaps exist but are <strong>not</strong> GA blockers — the
+            SDK team has explicitly deferred them past GA. Excluded from the
+            blocker and stretch counts above.
+          </p>
+          <GapsTable rows={deferredGaps} sdks={sdks} targetSdk={targetSdk} />
+        </section>
+      )}
     </div>
   )
 }

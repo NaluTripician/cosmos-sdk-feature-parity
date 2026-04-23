@@ -25,7 +25,7 @@ A private dashboard tracking feature parity — and retry behavior — across al
 4. **`data/sdks.yaml`** — SDK metadata (repos, changelog paths, versions)
 5. **`scripts/`** — Python scripts to scrape changelogs, scrape SDK PRs, scrape public API surfaces (Rust docs.rs + all-SDK), detect source-file drift, and build snapshots
 6. **`site/`** — Static React dashboard (deployed to GitHub Pages) with **Features**, **Retries**, **Failovers**, **Recent Activity**, and **GA Readiness** tabs. The **GA Readiness** tab lets any SDK lead pick a target SDK (defaults to Rust) and see the feature gaps where their SDK is behind while ≥2 other SDKs are already GA — i.e., the likely GA blockers. Share the view with `?tab=ga-readiness&sdk=<sdk>`.
-7. **`.github/workflows/`** — Weekly cron to update data and redeploy
+7. **`.github/workflows/`** — Weekly cron (`update-parity.yml`) to refresh scraped data, plus `deploy-site.yml` which rebuilds and redeploys the site on every push to `main` that touches `data/**`, `site/**`, or the copy/validate scripts. Manually triggerable via **Run workflow** in the Actions tab.
 
 ## Quick Start
 
@@ -94,6 +94,31 @@ Example:
 dotnet: { status: "ga", requires_opt_in: "separate_package", opt_in_name: "Microsoft.Azure.Cosmos.FaultInjection" }
 java:   { status: "preview", requires_opt_in: "system_property", opt_in_name: "azure.cosmos.thinClientEnabled", public_api: false }
 python: { status: "preview", public_api: false, notes: "test utility only" }
+```
+
+### Per-cell tier + issue links
+
+Each per-SDK cell may additionally carry two classification / tracking fields:
+
+- `tier` — one of `ga_blocker`, `post_ga`, `nice_to_have`. Classifies the
+  feature's priority for **that specific SDK**. The GA Readiness view uses
+  this to split "real" GA blockers from features intentionally deferred
+  past GA (e.g. Rust Change Feed Processor is tagged `tier: post_ga`).
+- `issues` — a non-empty list of tracking-issue objects, each
+  `{ url: <gh-issue-url>, title?: <string> }`. Rendered as 🐛 chips in the
+  matrix. The URL must be `http://` or `https://`; beyond that no format
+  check is enforced (GitHub issues, ADO work items, internal trackers all
+  work).
+
+Example:
+
+```yaml
+rust:
+  status: "not_started"
+  tier: "post_ga"
+  issues:
+    - url: https://github.com/Azure/azure-sdk-for-rust/issues/1234
+      title: "Track Change Feed Processor post-GA"
 ```
 
 ## Assessment Hints
