@@ -482,7 +482,7 @@ categories:
           changelog_keywords: ["fault injection", "FaultInjection", "FaultInjectionRule", "inject faults"]
         sdks:
           dotnet: { status: "ga", requires_opt_in: "separate_package", opt_in_name: "Microsoft.Azure.Cosmos.FaultInjection", notes: "Exposed via separate Microsoft.Azure.Cosmos.FaultInjection NuGet package; not tracked in the main Microsoft.Azure.Cosmos changelog." }
-          java: { status: "ga", since: "4.42.0", notes: "Fault injection support added in 4.42.0 (PR #33329)." }
+          java: { status: "ga", requires_opt_in: "separate_package", opt_in_name: "azure-cosmos-test", since: "4.42.0", notes: "Fault injection support added in 4.42.0 (PR #33329)." }
           python: { status: "preview", public_api: false, notes: "FaultInjectionTransport test utility; not yet public API" }
           go: { status: "not_started" }
           rust: { status: "ga", since: "0.31.0", notes: "Opt-in via the `fault_injection` Cargo feature flag to avoid compiling testing utilities into production; API is stable and supported (not a preview API). Follow-up branch ft/status-taxonomy will express this as requires_opt_in: cargo_feature." }
