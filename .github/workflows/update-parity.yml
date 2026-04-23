@@ -35,6 +35,11 @@ jobs:
             echo "artifact=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Fetch recent PRs per SDK (last 14 days)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/fetch_recent_prs.py
+
       - name: Scrape retry-policy source files (drift detection)
         id: scrape_retries
         env:
