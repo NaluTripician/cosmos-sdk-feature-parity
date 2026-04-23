@@ -178,17 +178,28 @@ export default function App() {
     <div className="min-h-screen">
       {/* Header */}
       <header className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <h1 className="text-2xl font-bold">🌍 Cosmos DB SDK Feature Parity</h1>
-          <p className="text-blue-200 mt-1">
-            Tracking feature support across .NET, Java, Python, Go, and Rust SDKs
-          </p>
-          {lastRunBadge}
-          {scrapeData && (
-            <p className="text-blue-300 text-sm mt-1">
-              Last updated: {new Date(scrapeData.scraped_at).toLocaleDateString()}
+        <div className="max-w-7xl mx-auto px-4 py-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">🌍 Cosmos DB SDK Feature Parity</h1>
+            <p className="text-blue-200 mt-1">
+              Tracking feature support across .NET, Java, Python, Go, and Rust SDKs
             </p>
-          )}
+            {lastRunBadge}
+            {scrapeData && (
+              <p className="text-blue-300 text-sm mt-1">
+                Last updated: {new Date(scrapeData.scraped_at).toLocaleDateString()}
+              </p>
+            )}
+          </div>
+          <a
+            href="./CONTRIBUTING.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 inline-flex items-center gap-1 bg-white/10 hover:bg-white/20 border border-white/30 text-white text-sm font-medium px-3 py-1.5 rounded-md transition-colors"
+            title="How to contribute edits to the parity matrices"
+          >
+            ✏️ Contribute
+          </a>
         </div>
       </header>
 
