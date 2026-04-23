@@ -12,6 +12,36 @@ import GaReadinessView from './components/GaReadinessView.jsx'
 
 const SDK_ORDER = ['dotnet', 'java', 'python', 'go', 'rust']
 const VALID_TABS = new Set(['features', 'retries', 'failovers', 'recent', 'ga-readiness'])
+const ORG_NAME = 'Azure'
+const TOKEN_STORAGE_KEY = 'parity_gh_token'
+
+async function verifyOrgMembership(token) {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  }
+  const meRes = await fetch('https://api.github.com/user', { headers })
+  if (!meRes.ok) {
+    throw new Error(`token rejected by GitHub (HTTP ${meRes.status}). Check that the token is valid and has the 'read:org' scope.`)
+  }
+  const me = await meRes.json()
+  const memRes = await fetch(`https://api.github.com/user/memberships/orgs/${ORG_NAME}`, { headers })
+  if (memRes.status === 404) {
+    throw new Error(`@${me.login} is not a member of the ${ORG_NAME} organization.`)
+  }
+  if (memRes.status === 403) {
+    throw new Error(`GitHub refused the membership check. The token needs the 'read:org' scope.`)
+  }
+  if (!memRes.ok) {
+    throw new Error(`Membership check failed (HTTP ${memRes.status}).`)
+  }
+  const mem = await memRes.json()
+  if (mem.state !== 'active') {
+    throw new Error(`Membership in ${ORG_NAME} is '${mem.state}', not 'active'.`)
+  }
+  return { login: me.login }
+}
 
 function readInitialUrlState() {
   if (typeof window === 'undefined') return { tab: 'features', sdk: 'rust' }
@@ -36,6 +66,102 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('all') // all, gaps
+  const [editMode, setEditMode] = useState(false)
+  const [pendingChanges, setPendingChanges] = useState({}) // key = "featureId/sdkId", value = tier or null
+  const [authUser, setAuthUser] = useState(null) // { login } once verified as Azure org member
+  const [authChecking, setAuthChecking] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const tok = window.sessionStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!tok) return
+    setAuthChecking(true)
+    verifyOrgMembership(tok)
+      .then(setAuthUser)
+      .catch(() => window.sessionStorage.removeItem(TOKEN_STORAGE_KEY))
+      .finally(() => setAuthChecking(false))
+  }, [])
+
+  const signIn = async () => {
+    const raw = window.prompt(
+      `Editing tiers is restricted to members of the @${ORG_NAME} GitHub org.\n\n` +
+      `Paste a GitHub Personal Access Token (classic or fine-grained) with the 'read:org' scope. ` +
+      `It is stored only in this browser session and is only sent to api.github.com to verify your membership.`
+    )
+    if (!raw) return
+    const token = raw.trim()
+    setAuthChecking(true)
+    try {
+      const u = await verifyOrgMembership(token)
+      window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token)
+      setAuthUser(u)
+    } catch (e) {
+      window.alert(`Sign-in failed: ${e.message}`)
+    } finally {
+      setAuthChecking(false)
+    }
+  }
+
+  const signOut = () => {
+    window.sessionStorage.removeItem(TOKEN_STORAGE_KEY)
+    setAuthUser(null)
+    if (editMode) {
+      setEditMode(false)
+      setPendingChanges({})
+    }
+  }
+
+  const handleTierChange = (featureId, sdkId, newTier) => {
+    const key = `${featureId}/${sdkId}`
+    setPendingChanges(prev => {
+      const next = { ...prev }
+      // Store '' to mean "clear the tier" so we can distinguish from "no change".
+      next[key] = newTier === null ? '' : newTier
+      return next
+    })
+  }
+
+  const clearPending = () => setPendingChanges({})
+
+  const downloadPatch = () => {
+    if (!features) return
+    // Build a change list, skipping no-ops (same tier as on disk).
+    const changes = []
+    for (const [key, pendingTier] of Object.entries(pendingChanges)) {
+      const [featureId, sdkId] = key.split('/')
+      let originalTier = null
+      outer: for (const cat of features.categories || []) {
+        for (const feat of cat.features || []) {
+          if (feat.id === featureId) {
+            originalTier = feat.sdks?.[sdkId]?.tier || null
+            break outer
+          }
+        }
+      }
+      const normalizedNew = pendingTier === '' ? null : pendingTier
+      if (normalizedNew === originalTier) continue
+      changes.push({ feature_id: featureId, sdk_id: sdkId, tier: normalizedNew })
+    }
+    if (changes.length === 0) {
+      alert('No actual changes to export (all staged edits match current values).')
+      return
+    }
+    const payload = {
+      generated_at: new Date().toISOString(),
+      generated_by: 'parity-site/tier-editor',
+      generated_by_user: authUser ? authUser.login : null,
+      changes,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `tier-patch-${Date.now()}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
   const initialUrl = readInitialUrlState()
   const [tab, setTab] = useState(initialUrl.tab) // features, retries, failovers, ga-readiness
   const [gaTargetSdk, setGaTargetSdk] = useState(initialUrl.sdk)
@@ -301,7 +427,7 @@ export default function App() {
           <>
             <ParityStats stats={stats} sdks={sdks} sdkOrder={SDK_ORDER} />
 
-            <div className="flex gap-2 mb-4 mt-6">
+            <div className="flex gap-2 mb-4 mt-6 items-center">
               <button
                 onClick={() => setFilter('all')}
                 className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
@@ -322,6 +448,47 @@ export default function App() {
               >
                 🔍 Show Gaps Only
               </button>
+              <span className="flex-1" />
+              {!authUser ? (
+                <button
+                  onClick={signIn}
+                  disabled={authChecking}
+                  className="px-3 py-1.5 rounded text-sm font-medium transition-colors bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+                  title={`Editing tiers is gated on @${ORG_NAME} org membership. Requires a PAT with read:org.`}
+                >
+                  {authChecking ? '⏳ Verifying…' : `🔒 Sign in to edit (${ORG_NAME} members)`}
+                </button>
+              ) : (
+                <>
+                  <span className="text-xs text-gray-600 flex items-center gap-1">
+                    ✅ @{authUser.login}
+                    <button
+                      onClick={signOut}
+                      className="underline hover:text-red-600"
+                      title="Clear the stored token from this browser"
+                    >
+                      sign out
+                    </button>
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (editMode && Object.keys(pendingChanges).length > 0) {
+                        if (!window.confirm('Exit edit mode and discard pending tier changes?')) return
+                        clearPending()
+                      }
+                      setEditMode(v => !v)
+                    }}
+                    className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                      editMode
+                        ? 'bg-amber-500 text-white hover:bg-amber-600'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                    title="Toggle inline tier editing. Changes are staged locally; export them as a JSON patch when done."
+                  >
+                    {editMode ? '✏️ Editing tiers…' : '✏️ Edit tiers'}
+                  </button>
+                </>
+              )}
             </div>
 
             <ParityMatrix
@@ -330,6 +497,9 @@ export default function App() {
               sdkOrder={SDK_ORDER}
               filter={filter}
               issuesIndex={issuesIndex}
+              editMode={editMode && !!authUser}
+              pendingChanges={pendingChanges}
+              onTierChange={handleTierChange}
             />
           </>
         )}
@@ -421,6 +591,42 @@ export default function App() {
           />
         )}
       </main>
+
+      {editMode && Object.keys(pendingChanges).length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 bg-white border-2 border-amber-400 rounded-lg shadow-xl p-4 max-w-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-bold text-amber-700">
+              ✏️ {Object.keys(pendingChanges).length} pending tier change{Object.keys(pendingChanges).length === 1 ? '' : 's'}
+            </div>
+            <button
+              onClick={clearPending}
+              className="text-xs text-gray-500 hover:text-red-600"
+              title="Discard all pending changes"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="max-h-40 overflow-y-auto text-xs text-gray-700 font-mono mb-3 space-y-0.5">
+            {Object.entries(pendingChanges).map(([key, tier]) => (
+              <div key={key}>
+                <span className="text-gray-500">{key}</span> → <span className="text-amber-700">{tier || '(none)'}</span>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={downloadPatch}
+            className="w-full px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded"
+          >
+            ⬇️ Download patch (JSON)
+          </button>
+          <div className="mt-2 text-[10px] text-gray-500 leading-tight">
+            Apply locally:
+            <code className="block bg-gray-100 p-1 rounded mt-1 break-all">
+              python scripts/apply_tier_patch.py tier-patch-*.json
+            </code>
+          </div>
+        </div>
+      )}
 
       <footer className="border-t mt-12 py-6 text-center text-sm text-gray-500">
         Data sourced from SDK changelogs and pinned source files. Edit{' '}

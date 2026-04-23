@@ -45,6 +45,13 @@ const TIER_CONFIG = {
   },
 }
 
+const TIER_OPTIONS = [
+  { value: '', label: '—' },
+  { value: 'ga_blocker', label: '🚧 GA blocker' },
+  { value: 'post_ga', label: '⏭️ Post-GA' },
+  { value: 'nice_to_have', label: '✨ Nice-to-have' },
+]
+
 function TierBadge({ tier }) {
   if (!tier) return null
   const config = TIER_CONFIG[tier]
@@ -107,7 +114,7 @@ function IssueLinks({ issues, issuesIndex }) {
   )
 }
 
-function StatusCell({ sdkFeature, issuesIndex }) {
+function StatusCell({ sdkFeature, issuesIndex, featureId, sdkId, editMode, pendingTier, onTierChange }) {
   const status = sdkFeature?.status || 'not_started'
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.not_started
   const since = sdkFeature?.since
@@ -116,7 +123,10 @@ function StatusCell({ sdkFeature, issuesIndex }) {
   const optInName = sdkFeature?.opt_in_name
   const publicApi = sdkFeature?.public_api
   const isInternalOnly = publicApi === false
-  const tier = sdkFeature?.tier
+  const originalTier = sdkFeature?.tier
+  // In edit mode show the pending staged value; otherwise show what's in the data.
+  const tier = editMode && pendingTier !== undefined ? pendingTier : originalTier
+  const isPendingChange = editMode && pendingTier !== undefined && pendingTier !== (originalTier || '')
   const issues = Array.isArray(sdkFeature?.issues) ? sdkFeature.issues : []
 
   const optInLabel = requiresOptIn ? (OPT_IN_LABELS[requiresOptIn] || requiresOptIn) : null
@@ -145,10 +155,25 @@ function StatusCell({ sdkFeature, issuesIndex }) {
           </span>
         )}
       </div>
-      {tier && (
-        <div className="mt-1 flex justify-center">
-          <TierBadge tier={tier} />
+      {editMode ? (
+        <div className={`mt-1 flex justify-center ${isPendingChange ? 'ring-2 ring-amber-400 rounded' : ''}`}>
+          <select
+            value={tier || ''}
+            onChange={(e) => onTierChange?.(featureId, sdkId, e.target.value || null)}
+            className="text-[10px] border border-gray-300 rounded px-1 py-0 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            title={isPendingChange ? `Pending change from ${originalTier || '(none)'} to ${tier || '(none)'}` : 'Set tier'}
+          >
+            {TIER_OPTIONS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
         </div>
+      ) : (
+        tier && (
+          <div className="mt-1 flex justify-center">
+            <TierBadge tier={tier} />
+          </div>
+        )
       )}
       {since && (
         <div className="text-[10px] text-gray-400 mt-0.5">v{since}</div>
@@ -182,7 +207,7 @@ function StatusCell({ sdkFeature, issuesIndex }) {
   )
 }
 
-export default function ParityMatrix({ features, sdks, sdkOrder, filter, issuesIndex }) {
+export default function ParityMatrix({ features, sdks, sdkOrder, filter, issuesIndex, editMode, pendingChanges, onTierChange }) {
   if (!features?.categories) return null
 
   const filteredCategories = features.categories.map(category => {
@@ -234,9 +259,22 @@ export default function ParityMatrix({ features, sdks, sdkOrder, filter, issuesI
                       <div className="text-xs text-gray-500 mt-0.5">{feature.description}</div>
                     )}
                   </td>
-                  {sdkOrder.map(sdkId => (
-                    <StatusCell key={sdkId} sdkFeature={feature.sdks?.[sdkId]} issuesIndex={issuesIndex} />
-                  ))}
+                  {sdkOrder.map(sdkId => {
+                    const key = `${feature.id}/${sdkId}`
+                    const pendingTier = pendingChanges?.[key]
+                    return (
+                      <StatusCell
+                        key={sdkId}
+                        sdkFeature={feature.sdks?.[sdkId]}
+                        issuesIndex={issuesIndex}
+                        featureId={feature.id}
+                        sdkId={sdkId}
+                        editMode={editMode}
+                        pendingTier={pendingTier}
+                        onTierChange={onTierChange}
+                      />
+                    )
+                  })}
                 </tr>
               ))}
             </React.Fragment>
