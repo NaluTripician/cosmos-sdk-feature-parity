@@ -23,8 +23,8 @@ A private dashboard tracking feature parity — and retry behavior — across al
 2. **`data/retries.yaml`** — Curated retry-behavior × SDK × connection-mode matrix (source of truth)
 3. **`data/failovers.yaml`** — Curated multi-region / failover × SDK matrix (source of truth)
 4. **`data/sdks.yaml`** — SDK metadata (repos, changelog paths, versions)
-5. **`scripts/`** — Python scripts to scrape changelogs, scrape the Rust public API from docs.rs, detect source-file drift, and build snapshots
-6. **`site/`** — Static React dashboard (deployed to GitHub Pages) with **Features**, **Retries**, and **Failovers** tabs
+5. **`scripts/`** — Python scripts to scrape changelogs, scrape SDK PRs, scrape the Rust public API from docs.rs, detect source-file drift, and build snapshots
+6. **`site/`** — Static React dashboard (deployed to GitHub Pages) with **Features**, **Retries**, **Failovers**, and **Recent Activity** tabs
 7. **`.github/workflows/`** — Weekly cron to update data and redeploy
 
 ## Quick Start
@@ -35,6 +35,9 @@ pip install -r scripts/requirements.txt
 
 # Run changelog scraper manually
 python scripts/scrape_changelogs.py
+
+# Fetch recent PRs per SDK (last 14 days) -> data/scraped/recent_prs_latest.json
+python scripts/fetch_recent_prs.py
 
 # Detect drift in retry-policy source files
 python scripts/scrape_source_refs.py --data data/retries.yaml --output retry_policies --label retry-policy

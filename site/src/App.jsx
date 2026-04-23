@@ -7,6 +7,7 @@ import RetryMatrix from './components/RetryMatrix.jsx'
 import RetryStats from './components/RetryStats.jsx'
 import FailoverMatrix from './components/FailoverMatrix.jsx'
 import FailoverStats from './components/FailoverStats.jsx'
+import RecentPrs from './components/RecentPrs.jsx'
 
 const SDK_ORDER = ['dotnet', 'java', 'python', 'go', 'rust']
 
@@ -17,6 +18,7 @@ export default function App() {
   const [failovers, setFailovers] = useState(null)
   const [scrapeData, setScrapeData] = useState(null)
   const [lastRun, setLastRun] = useState(null)
+  const [recentPrs, setRecentPrs] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('all') // all, gaps
@@ -75,6 +77,16 @@ export default function App() {
           }
         } catch (e) {
           // Heartbeat is optional
+        }
+
+        // Try to load recent-PRs data (may not exist yet)
+        try {
+          const prsResp = await fetch(`${base}data/scraped/recent_prs_latest.json`)
+          if (prsResp.ok) {
+            setRecentPrs(await prsResp.json())
+          }
+        } catch (e) {
+          // Optional
         }
 
         setLoading(false)
@@ -223,6 +235,7 @@ export default function App() {
               { id: 'features', label: '📋 Features' },
               { id: 'retries', label: '🔁 Retries' },
               { id: 'failovers', label: '🌐 Failovers' },
+              { id: 'recent', label: '🆕 Recent Activity' },
             ].map(t => (
               <button
                 key={t.id}
@@ -309,6 +322,10 @@ export default function App() {
               filter={filter}
             />
           </>
+        )}
+
+        {tab === 'recent' && (
+          <RecentPrs data={recentPrs} sdks={sdks} />
         )}
 
         {tab === 'failovers' && (
