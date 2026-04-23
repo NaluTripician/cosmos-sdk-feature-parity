@@ -36,6 +36,59 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('all') // all, gaps
+  const [editMode, setEditMode] = useState(false)
+  const [pendingChanges, setPendingChanges] = useState({}) // key = "featureId/sdkId", value = tier or null
+
+  const handleTierChange = (featureId, sdkId, newTier) => {
+    const key = `${featureId}/${sdkId}`
+    setPendingChanges(prev => {
+      const next = { ...prev }
+      // Store '' to mean "clear the tier" so we can distinguish from "no change".
+      next[key] = newTier === null ? '' : newTier
+      return next
+    })
+  }
+
+  const clearPending = () => setPendingChanges({})
+
+  const downloadPatch = () => {
+    if (!features) return
+    // Build a change list, skipping no-ops (same tier as on disk).
+    const changes = []
+    for (const [key, pendingTier] of Object.entries(pendingChanges)) {
+      const [featureId, sdkId] = key.split('/')
+      let originalTier = null
+      outer: for (const cat of features.categories || []) {
+        for (const feat of cat.features || []) {
+          if (feat.id === featureId) {
+            originalTier = feat.sdks?.[sdkId]?.tier || null
+            break outer
+          }
+        }
+      }
+      const normalizedNew = pendingTier === '' ? null : pendingTier
+      if (normalizedNew === originalTier) continue
+      changes.push({ feature_id: featureId, sdk_id: sdkId, tier: normalizedNew })
+    }
+    if (changes.length === 0) {
+      alert('No actual changes to export (all staged edits match current values).')
+      return
+    }
+    const payload = {
+      generated_at: new Date().toISOString(),
+      generated_by: 'parity-site/tier-editor',
+      changes,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `tier-patch-${Date.now()}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
   const initialUrl = readInitialUrlState()
   const [tab, setTab] = useState(initialUrl.tab) // features, retries, failovers, ga-readiness
   const [gaTargetSdk, setGaTargetSdk] = useState(initialUrl.sdk)
@@ -301,7 +354,7 @@ export default function App() {
           <>
             <ParityStats stats={stats} sdks={sdks} sdkOrder={SDK_ORDER} />
 
-            <div className="flex gap-2 mb-4 mt-6">
+            <div className="flex gap-2 mb-4 mt-6 items-center">
               <button
                 onClick={() => setFilter('all')}
                 className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
@@ -322,6 +375,24 @@ export default function App() {
               >
                 🔍 Show Gaps Only
               </button>
+              <span className="flex-1" />
+              <button
+                onClick={() => {
+                  if (editMode && Object.keys(pendingChanges).length > 0) {
+                    if (!window.confirm('Exit edit mode and discard pending tier changes?')) return
+                    clearPending()
+                  }
+                  setEditMode(v => !v)
+                }}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  editMode
+                    ? 'bg-amber-500 text-white hover:bg-amber-600'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                title="Toggle inline tier editing. Changes are staged locally; export them as a JSON patch when done."
+              >
+                {editMode ? '✏️ Editing tiers…' : '✏️ Edit tiers'}
+              </button>
             </div>
 
             <ParityMatrix
@@ -330,6 +401,9 @@ export default function App() {
               sdkOrder={SDK_ORDER}
               filter={filter}
               issuesIndex={issuesIndex}
+              editMode={editMode}
+              pendingChanges={pendingChanges}
+              onTierChange={handleTierChange}
             />
           </>
         )}
@@ -421,6 +495,42 @@ export default function App() {
           />
         )}
       </main>
+
+      {editMode && Object.keys(pendingChanges).length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 bg-white border-2 border-amber-400 rounded-lg shadow-xl p-4 max-w-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-bold text-amber-700">
+              ✏️ {Object.keys(pendingChanges).length} pending tier change{Object.keys(pendingChanges).length === 1 ? '' : 's'}
+            </div>
+            <button
+              onClick={clearPending}
+              className="text-xs text-gray-500 hover:text-red-600"
+              title="Discard all pending changes"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="max-h-40 overflow-y-auto text-xs text-gray-700 font-mono mb-3 space-y-0.5">
+            {Object.entries(pendingChanges).map(([key, tier]) => (
+              <div key={key}>
+                <span className="text-gray-500">{key}</span> → <span className="text-amber-700">{tier || '(none)'}</span>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={downloadPatch}
+            className="w-full px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded"
+          >
+            ⬇️ Download patch (JSON)
+          </button>
+          <div className="mt-2 text-[10px] text-gray-500 leading-tight">
+            Apply locally:
+            <code className="block bg-gray-100 p-1 rounded mt-1 break-all">
+              python scripts/apply_tier_patch.py tier-patch-*.json
+            </code>
+          </div>
+        </div>
+      )}
 
       <footer className="border-t mt-12 py-6 text-center text-sm text-gray-500">
         Data sourced from SDK changelogs and pinned source files. Edit{' '}

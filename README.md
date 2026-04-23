@@ -124,6 +124,43 @@ tier_label_map:
 
 Omitting the map falls back to the defaults shown above.
 
+### Editing tiers from the site (no PR required up front)
+
+The parity site has an **"✏️ Edit tiers"** toggle next to the filter buttons.
+Turning it on replaces each cell's tier badge with a dropdown. Staged
+changes are tracked locally (nothing is submitted yet) and a floating panel
+summarises them.
+
+Clicking **⬇️ Download patch (JSON)** saves a file like:
+
+```json
+{
+  "generated_at": "2026-04-23T15:00:00.000Z",
+  "generated_by": "parity-site/tier-editor",
+  "changes": [
+    {"feature_id": "binary_encoding", "sdk_id": "java", "tier": "nice_to_have"},
+    {"feature_id": "change_feed_processor", "sdk_id": "rust", "tier": null}
+  ]
+}
+```
+
+Apply it locally to `data/features.yaml`, then commit + PR as usual:
+
+```powershell
+python scripts/apply_tier_patch.py tier-patch-*.json
+python scripts/validate_features_schema.py   # sanity check
+cd site; npm run build                        # sanity check
+git add data/features.yaml; git commit ...
+```
+
+The script edits the YAML **line-by-line** so comments, flow-style
+spacing, and quoting are preserved byte-for-byte outside the touched
+cells. Both single-line (`dotnet: { status: "ga" }`) and multi-line
+block cells are supported. `--dry-run` previews without writing.
+
+No PAT, no browser auth — the site only ever produces a downloadable
+patch, never contacts GitHub directly.
+
 Example:
 
 ```yaml
