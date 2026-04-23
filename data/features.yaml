@@ -1,5 +1,5 @@
 # Cosmos DB SDK Feature Parity Matrix
-# Last updated: 2026-04-23 (Rust client-side query engine correction per Ashley feedback)
+# Last updated: 2026-04-23 (reclassified Rust Fault Injection as ga; opt-in via Cargo feature flag)
 #
 # Status values:
 #   ga           - Generally Available
@@ -427,7 +427,7 @@ categories:
           java: { status: "ga", since: "4.42.0", notes: "Fault injection support added in 4.42.0 (PR #33329)." }
           python: { status: "preview", notes: "FaultInjectionTransport test utility; not yet public API" }
           go: { status: "not_started" }
-          rust: { status: "preview", since: "0.31.0", notes: "Behind fault_injection feature flag" }
+          rust: { status: "ga", since: "0.31.0", notes: "Opt-in via the `fault_injection` Cargo feature flag to avoid compiling testing utilities into production; API is stable and supported (not a preview API). Follow-up branch ft/status-taxonomy will express this as requires_opt_in: cargo_feature." }
 
       - id: read_consistency_strategy
         name: "Read Consistency Strategy"
