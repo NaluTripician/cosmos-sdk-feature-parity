@@ -2,6 +2,11 @@
 
 A private dashboard tracking feature parity — and retry behavior — across all Azure Cosmos DB NoSQL SDKs.
 
+> 📣 **Contributing?** SDK leads and anyone proposing edits should read
+> [**CONTRIBUTING.md**](./CONTRIBUTING.md) first — it covers source-of-truth
+> files, the weekly-cron invariants, branch naming, PR expectations, and
+> per-SDK ownership.
+
 ## SDKs Tracked
 
 | SDK | Package | Repository |

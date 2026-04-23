@@ -1,0 +1,33 @@
+# CODEOWNERS for cosmos-sdk-feature-parity
+#
+# NOTE ON CONVENTION:
+# Our parity data is stored in a small number of combined YAML files
+# (data/features.yaml, data/retries.yaml, data/failovers.yaml) rather than
+# per-SDK files. GitHub CODEOWNERS cannot path-match *inside* a file, so the
+# entries below assign repo-wide review authority to all SDK leads.
+#
+# In practice:
+#   - A PR that touches any SDK's rows MUST be approved by that SDK's lead.
+#   - Reviewers should block-merge if rows for an SDK they do not own are
+#     changed without that SDK lead's approval.
+#   - See CONTRIBUTING.md ("Per-SDK ownership") for the ownership table.
+#
+# TODO(repo owner): replace the *-lead-tbd placeholders with real GitHub
+# handles (or team slugs like @org/cosmos-dotnet-leads).
+
+# Repo-wide default: any of the SDK leads can review general changes
+# (tooling, site, docs). SDK-specific data changes additionally require the
+# owning SDK lead per CONTRIBUTING.md.
+*                       @dotnet-lead-tbd @java-lead-tbd @python-lead-tbd @go-lead-tbd @rust-lead-tbd
+
+# Curated parity data — require broad review. Tag the specific SDK lead(s)
+# in the PR per CONTRIBUTING.md.
+/data/features.yaml     @dotnet-lead-tbd @java-lead-tbd @python-lead-tbd @go-lead-tbd @rust-lead-tbd
+/data/retries.yaml      @dotnet-lead-tbd @java-lead-tbd @python-lead-tbd @go-lead-tbd @rust-lead-tbd
+/data/failovers.yaml    @dotnet-lead-tbd @java-lead-tbd @python-lead-tbd @go-lead-tbd @rust-lead-tbd
+/data/sdks.yaml         @dotnet-lead-tbd @java-lead-tbd @python-lead-tbd @go-lead-tbd @rust-lead-tbd
+
+# Contribution docs and templates
+/CONTRIBUTING.md                   @dotnet-lead-tbd @java-lead-tbd @python-lead-tbd @go-lead-tbd @rust-lead-tbd
+/.github/PULL_REQUEST_TEMPLATE.md  @dotnet-lead-tbd @java-lead-tbd @python-lead-tbd @go-lead-tbd @rust-lead-tbd
+/.github/CODEOWNERS                @dotnet-lead-tbd @java-lead-tbd @python-lead-tbd @go-lead-tbd @rust-lead-tbd
