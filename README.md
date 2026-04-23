@@ -37,6 +37,10 @@ python scripts/scrape_source_refs.py --data data/retries.yaml --output retry_pol
 # Detect drift in failover source files
 python scripts/scrape_source_refs.py --data data/failovers.yaml --output failover_policies --label failover-policy
 
+# Scrape public API surfaces across all SDKs (signal-only)
+python scripts/scrape_public_api.py            # all SDKs
+python scripts/scrape_public_api.py --sdk go   # single SDK
+
 # Build and serve the dashboard
 cd site
 npm install
@@ -150,9 +154,42 @@ calls the generic scraper with retry-specific arguments.
 2. Scrape retry-policy source files, detect drift (`scrape_source_refs.py --data data/retries.yaml`)
 3. Scrape failover source files, detect drift (`scrape_source_refs.py --data data/failovers.yaml`)
 4. Scrape the Rust `azure_data_cosmos` public API + Cargo features from docs.rs, detect drift (`scrape_public_api_rust.py`). The Rust CHANGELOG misses features, so the public API surface is used as an additional signal when auditing `data/features.yaml`. Never auto-mutates curated YAML.
-5. Generate parity snapshot (`generate_snapshot.py`)
-6. Commit changed `data/` files
-7. Build and deploy the site
+5. Scrape public API surfaces across all SDKs (`scrape_public_api.py`, `continue-on-error`)
+6. Generate parity snapshot (`generate_snapshot.py`)
+7. Commit changed `data/` files
+8. Build and deploy the site
+
+## Public API surface scraper
+
+CHANGELOGs miss features in every SDK (e.g. new public types can ship without
+a changelog entry), so `scripts/scrape_public_api.py` captures the raw public
+API surface for each SDK and writes structured artifacts to
+`data/scraped/`:
+
+| Artifact | Purpose |
+|----------|---------|
+| `<sdk>_public_api_latest.json` | Most recent snapshot — `{scraped_at, sdk, source_url, version, public_items: [{kind, path}]}` |
+| `<sdk>_public_api_<YYYY-MM-DD>.json` | Dated historical snapshot |
+| `<sdk>_public_api_drift.md` | Written only when `public_items` changed between runs (added/removed symbols) |
+
+Sources per SDK:
+
+- **.NET** — `learn.microsoft.com/en-us/dotnet/api/microsoft.azure.cosmos` overview
+- **Java** — Azure SDK javadocs (`azuresdkdocs.z19.web.core.windows.net/java/azure-cosmos/latest/`)
+- **Python** — Azure SDK Sphinx docs `genindex.html` + PyPI JSON for version
+- **Go** — `pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos`
+- **Rust** — stub on this branch; full docs.rs scraper lives on the sibling
+  branch `ft/scrape-docs-rs`
+
+Adapters live in `scripts/public_api_adapters/<sdk>.py`. Each returns a
+uniform payload so downstream consumers (drift diffs, dashboards) don't need
+per-SDK logic. Network failures are caught and written as a valid JSON stub
+with an `error` field — the workflow step uses `continue-on-error: true` so
+an outage in one doc site doesn't fail the weekly run.
+
+**This scraper is signal-only — `data/features.yaml`, `data/retries.yaml`,
+and `data/failovers.yaml` are NEVER auto-mutated.** Humans review drift
+reports alongside `CHANGELOG.md` when deciding what to edit.
 
 ## Updating Failover Behavior
 
