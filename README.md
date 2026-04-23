@@ -18,7 +18,7 @@ A private dashboard tracking feature parity — and retry behavior — across al
 2. **`data/retries.yaml`** — Curated retry-behavior × SDK × connection-mode matrix (source of truth)
 3. **`data/failovers.yaml`** — Curated multi-region / failover × SDK matrix (source of truth)
 4. **`data/sdks.yaml`** — SDK metadata (repos, changelog paths, versions)
-5. **`scripts/`** — Python scripts to scrape changelogs, detect source-file drift, and build snapshots
+5. **`scripts/`** — Python scripts to scrape changelogs, scrape the Rust public API from docs.rs, detect source-file drift, and build snapshots
 6. **`site/`** — Static React dashboard (deployed to GitHub Pages) with **Features**, **Retries**, and **Failovers** tabs
 7. **`.github/workflows/`** — Weekly cron to update data and redeploy
 
@@ -119,9 +119,10 @@ calls the generic scraper with retry-specific arguments.
 1. Scrape SDK changelogs (`scrape_changelogs.py`)
 2. Scrape retry-policy source files, detect drift (`scrape_source_refs.py --data data/retries.yaml`)
 3. Scrape failover source files, detect drift (`scrape_source_refs.py --data data/failovers.yaml`)
-4. Generate parity snapshot (`generate_snapshot.py`)
-5. Commit changed `data/` files
-6. Build and deploy the site
+4. Scrape the Rust `azure_data_cosmos` public API + Cargo features from docs.rs, detect drift (`scrape_public_api_rust.py`). The Rust CHANGELOG misses features, so the public API surface is used as an additional signal when auditing `data/features.yaml`. Never auto-mutates curated YAML.
+5. Generate parity snapshot (`generate_snapshot.py`)
+6. Commit changed `data/` files
+7. Build and deploy the site
 
 ## Updating Failover Behavior
 
