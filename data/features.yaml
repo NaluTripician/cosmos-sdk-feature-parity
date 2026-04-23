@@ -16,6 +16,15 @@ categories:
       - id: crud
         name: "CRUD Operations"
         description: "Create, Read, Replace, Delete items"
+        assessment:
+          notes_for_reviewer: "Baseline feature. Every SDK ships item-level create/read/replace/delete on the container client; verify only that the four verbs exist and are public (not preview/internal)."
+          public_api_symbols:
+            dotnet: ["Microsoft.Azure.Cosmos.Container.CreateItemAsync", "Microsoft.Azure.Cosmos.Container.ReadItemAsync", "Microsoft.Azure.Cosmos.Container.ReplaceItemAsync", "Microsoft.Azure.Cosmos.Container.DeleteItemAsync"]
+            java: ["com.azure.cosmos.CosmosAsyncContainer.createItem", "com.azure.cosmos.CosmosAsyncContainer.readItem", "com.azure.cosmos.CosmosAsyncContainer.replaceItem", "com.azure.cosmos.CosmosAsyncContainer.deleteItem"]
+            python: ["azure.cosmos.ContainerProxy.create_item", "azure.cosmos.ContainerProxy.read_item", "azure.cosmos.ContainerProxy.replace_item", "azure.cosmos.ContainerProxy.delete_item"]
+            go: ["github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos.ContainerClient.CreateItem", "github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos.ContainerClient.ReadItem", "github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos.ContainerClient.ReplaceItem", "github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos.ContainerClient.DeleteItem"]
+            rust: ["azure_data_cosmos::ContainerClient::create_item", "azure_data_cosmos::ContainerClient::read_item", "azure_data_cosmos::ContainerClient::replace_item", "azure_data_cosmos::ContainerClient::delete_item"]
+          changelog_keywords: ["CreateItem", "ReadItem", "ReplaceItem", "DeleteItem", "create_item", "read_item"]
         sdks:
           dotnet: { status: "ga", since: "3.0.0" }
           java: { status: "ga", since: "4.0.0" }
@@ -108,6 +117,17 @@ categories:
       - id: client_side_query_engine
         name: "Client-Side Query Engine"
         description: "Native client-side query execution for complex cross-partition queries"
+        assessment:
+          notes_for_reviewer: "Distinguish a true client-side query engine (orders/aggregates/groups cross-partition results client-side) from simple gateway-query passthrough. Go and Rust share the shared azure-cosmos-client-engine Rust crate and ship it behind feature flags / preview."
+          public_api_symbols:
+            dotnet: ["Microsoft.Azure.Cosmos.Query.Core"]
+            java: ["com.azure.cosmos.implementation.query"]
+            go: ["github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos.QueryEngine"]
+            rust: ["azure_data_cosmos::query", "azure_data_cosmos::clients::QueryEngine"]
+          detection_hints:
+            rust: ["preview_query_engine"]
+            go: ["preview_build_tag:cosmos_query_engine"]
+          changelog_keywords: ["client-side query", "query engine", "QueryEngine", "cross-partition query", "ORDER BY", "GROUP BY", "azure-cosmos-client-engine"]
         sdks:
           dotnet: { status: "ga", since: "3.0.0", notes: "Native ServiceInterop" }
           java: { status: "ga", since: "4.0.0", notes: "Native query pipeline" }
@@ -254,6 +274,13 @@ categories:
       - id: cross_region_hedging
         name: "Cross-Region Hedging / Availability Strategy"
         description: "Parallel speculative requests to secondary regions for lower latency"
+        assessment:
+          notes_for_reviewer: "Look for an 'availability strategy' / 'threshold based availability' / 'cross-regional hedging' type on the client or request options. Simple retry-on-other-region does NOT qualify — hedging must issue a parallel speculative request before the primary completes."
+          public_api_symbols:
+            dotnet: ["Microsoft.Azure.Cosmos.AvailabilityStrategy", "Microsoft.Azure.Cosmos.CrossRegionHedgingOptions"]
+            java: ["com.azure.cosmos.CosmosEndToEndOperationLatencyPolicyConfig", "com.azure.cosmos.ThresholdBasedAvailabilityStrategy"]
+            python: ["azure.cosmos.CosmosClient.enable_cross_region_hedging"]
+          changelog_keywords: ["hedging", "hedged", "availability strategy", "CrossRegionHedging", "ThresholdBasedAvailabilityStrategy", "speculative"]
         sdks:
           dotnet: { status: "ga", since: "3.47.0", notes: "Reads CrossRegionalHedging GA in 3.47.0 (PR #4966); writes GA in 3.50.0 (PR #5190); RequestOptions-level hedging GA in 3.54.0 (PR #5411)." }
           java: { status: "ga", since: "4.53.0", notes: "EndToEndOperationLatencyPolicyConfig.availabilityStrategy introduced around 4.53.0 (PR #37511)." }
@@ -264,6 +291,13 @@ categories:
       - id: ppaf
         name: "Per-Partition Automatic Failover (PPAF)"
         description: "Automatic failover at individual partition level"
+        assessment:
+          notes_for_reviewer: "PPAF is distinct from account-level automatic failover. Confirm the SDK honors per-partition 'unavailable' signals from the gateway and re-routes writes for that partition only (not the whole region). Typically gated by a client option like EnablePartitionLevelFailover / partitionLevelFailoverEnabled."
+          public_api_symbols:
+            dotnet: ["Microsoft.Azure.Cosmos.CosmosClientOptions.EnablePartitionLevelFailover"]
+            java: ["com.azure.cosmos.CosmosClientBuilder.partitionLevelFailoverEnabled"]
+            python: ["azure.cosmos.CosmosClient.enable_partition_level_failover"]
+          changelog_keywords: ["per-partition automatic failover", "PerPartitionAutomaticFailover", "PPAF", "partition-level failover", "PartitionLevelFailover", "per partition failover"]
         sdks:
           dotnet: { status: "ga", since: "3.51.0", notes: "First PPAF changelog entry is PR #5182 in 3.51.0 (enablement flag via gateway); 3.58.0 adds Hub Region processing (PR #5447)." }
           java: { status: "ga", since: "4.69.0", notes: "Per-Partition Automatic Failover first appears around 4.69.0." }
@@ -306,6 +340,14 @@ categories:
       - id: change_feed_pull
         name: "Change Feed (Pull Model)"
         description: "Pull-based change feed iteration with feed ranges"
+        assessment:
+          notes_for_reviewer: "Look for an iterator/paging API that accepts a ChangeFeedStartFrom / FeedRange + continuation token and returns batches of documents. The push-based Change Feed Processor is a separate feature — do not confuse them."
+          public_api_symbols:
+            dotnet: ["Microsoft.Azure.Cosmos.Container.GetChangeFeedIterator", "Microsoft.Azure.Cosmos.ChangeFeedStartFrom", "Microsoft.Azure.Cosmos.ChangeFeedMode"]
+            java: ["com.azure.cosmos.CosmosAsyncContainer.queryChangeFeed", "com.azure.cosmos.models.CosmosChangeFeedRequestOptions"]
+            python: ["azure.cosmos.ContainerProxy.query_items_change_feed"]
+            go: ["github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos.ContainerClient.NewChangeFeedPager"]
+          changelog_keywords: ["change feed", "ChangeFeed", "GetChangeFeedIterator", "queryChangeFeed", "query_items_change_feed", "NewChangeFeedPager", "feed range"]
         sdks:
           dotnet: { status: "ga", since: "3.0.0" }
           java: { status: "ga", since: "4.0.0" }
@@ -427,6 +469,17 @@ categories:
         # Once ft/rust-fault-injection-status merges, the rust cell here will
         # express: status: "ga", requires_opt_in: "cargo_feature",
         # opt_in_name: "fault_injection".
+        assessment:
+          notes_for_reviewer: "Behaviorally shipped in Rust behind a Cargo feature flag; not preview. In .NET it is shipped as a separate Microsoft.Azure.Cosmos.FaultInjection NuGet package. In Python today it is an internal test transport (FaultInjectionTransport), not public API — mark preview only if exposed as public API."
+          public_api_symbols:
+            dotnet: ["Microsoft.Azure.Cosmos.FaultInjection.FaultInjectionRule", "Microsoft.Azure.Cosmos.FaultInjection.FaultInjectionRuleBuilder"]
+            java: ["com.azure.cosmos.test.faultinjection.FaultInjectionRule", "com.azure.cosmos.test.faultinjection.FaultInjectionRuleBuilder"]
+            python: ["azure.cosmos.faults.FaultInjectionTransport"]
+            rust: ["azure_data_cosmos::fault_injection"]
+          detection_hints:
+            rust: ["fault_injection"]
+            dotnet: ["separate_package:Microsoft.Azure.Cosmos.FaultInjection"]
+          changelog_keywords: ["fault injection", "FaultInjection", "FaultInjectionRule", "inject faults"]
         sdks:
           dotnet: { status: "ga", requires_opt_in: "separate_package", opt_in_name: "Microsoft.Azure.Cosmos.FaultInjection", notes: "Exposed via separate Microsoft.Azure.Cosmos.FaultInjection NuGet package; not tracked in the main Microsoft.Azure.Cosmos changelog." }
           java: { status: "ga", since: "4.42.0", notes: "Fault injection support added in 4.42.0 (PR #33329)." }

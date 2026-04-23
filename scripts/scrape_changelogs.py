@@ -34,6 +34,32 @@ def load_sdk_config() -> dict:
         return yaml.safe_load(f)["sdks"]
 
 
+def load_assessment_keywords() -> dict[str, list[str]]:
+    """
+    Build feature_id -> [changelog_keyword, ...] from features.yaml's optional
+    per-feature `assessment.changelog_keywords` block.
+
+    Returns an empty dict if features.yaml has no assessment blocks, which
+    preserves the legacy FEATURE_PATTERNS-only behavior.
+    """
+    features_path = DATA_DIR / "features.yaml"
+    if not features_path.exists():
+        return {}
+    with open(features_path, "r") as f:
+        data = yaml.safe_load(f) or {}
+    index: dict[str, list[str]] = {}
+    for cat in data.get("categories", []) or []:
+        for feat in cat.get("features", []) or []:
+            if not isinstance(feat, dict):
+                continue
+            kws = (feat.get("assessment") or {}).get("changelog_keywords") or []
+            if kws and isinstance(kws, list):
+                fid = feat.get("id")
+                if isinstance(fid, str):
+                    index[fid] = [k for k in kws if isinstance(k, str)]
+    return index
+
+
 def github_headers() -> dict:
     """Build GitHub API headers with optional auth."""
     headers = {
@@ -154,8 +180,17 @@ def extract_features(content: str) -> list[str]:
     return features
 
 
-def detect_feature_keywords(text: str) -> list[str]:
-    """Detect known feature keywords in text. Returns matching feature IDs."""
+def detect_feature_keywords(
+    text: str,
+    assessment_keywords: dict[str, list[str]] | None = None,
+) -> list[str]:
+    """Detect known feature keywords in text. Returns matching feature IDs.
+
+    Uses the legacy built-in FEATURE_PATTERNS plus, when provided, per-feature
+    `assessment.changelog_keywords` from features.yaml as an additional
+    (stronger, SDK-owner-curated) signal. Backward compatible: if
+    `assessment_keywords` is None/empty, behavior is unchanged.
+    """
     FEATURE_PATTERNS = {
         "cross_region_hedging": [r"hedg(?:ing|e)", r"availability.?strategy"],
         "ppaf": [r"per.?partition.?(?:automatic)?.?failover", r"PPAF"],
@@ -191,12 +226,25 @@ def detect_feature_keywords(text: str) -> list[str]:
             if re.search(p, text, re.IGNORECASE):
                 matches.append(feature_id)
                 break
+
+    # Additional signal: substring match against curated per-feature
+    # assessment.changelog_keywords from features.yaml.
+    if assessment_keywords:
+        lowered = text.lower()
+        for feature_id, keywords in assessment_keywords.items():
+            if feature_id in matches:
+                continue
+            for kw in keywords:
+                if kw and kw.lower() in lowered:
+                    matches.append(feature_id)
+                    break
     return matches
 
 
 def scrape_all_sdks() -> dict:
     """Scrape changelogs and commit activity for all SDKs."""
     sdks_config = load_sdk_config()
+    assessment_keywords = load_assessment_keywords()
     now = datetime.now(timezone.utc)
     thirty_days_ago = (now - __import__("datetime").timedelta(days=30)).isoformat()
     seven_days_ago = (now - __import__("datetime").timedelta(days=7)).isoformat()
@@ -224,7 +272,9 @@ def scrape_all_sdks() -> dict:
             recent_features = {}
             for v in versions[:5]:
                 for feature_text in v.get("features", []):
-                    detected = detect_feature_keywords(feature_text)
+                    detected = detect_feature_keywords(
+                        feature_text, assessment_keywords
+                    )
                     for feat_id in detected:
                         if feat_id not in recent_features:
                             recent_features[feat_id] = {

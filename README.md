@@ -96,6 +96,110 @@ java:   { status: "preview", requires_opt_in: "system_property", opt_in_name: "a
 python: { status: "preview", public_api: false, notes: "test utility only" }
 ```
 
+## Assessment Hints
+
+Each feature in `data/features.yaml` may carry an **optional** `assessment:`
+block that embeds SDK-specific detection knowledge — the stuff you would
+otherwise have to put in a Copilot prompt every time you re-audit the matrix.
+
+This is the **recommended way for SDK leads** (e.g. Ashley on Rust, the .NET
+FaultInjection owners, etc.) to contribute detection knowledge for their SDK
+via a PR **that only touches the `assessment:` block of the features they
+own** — without editing parity cells for other SDKs. Per-SDK assessment PRs
+are intended to be fast, low-conflict, and incremental; the block is
+additive and orthogonal to the `sdks:` cells.
+
+### Schema
+
+```yaml
+- id: fault_injection
+  name: "Fault Injection"
+  description: "Simulate failures for resilience testing"
+  assessment:                              # OPTIONAL
+    notes_for_reviewer: |
+      Free-form text aimed at the human (or agent) re-auditing this
+      feature. Call out non-obvious shipping vehicles — separate NuGet
+      packages, Cargo feature flags, preview build tags, etc.
+    public_api_symbols:                    # per SDK, list of strings
+      dotnet: ["Microsoft.Azure.Cosmos.FaultInjection.FaultInjectionRule"]
+      java:   ["com.azure.cosmos.test.faultinjection.FaultInjectionRule"]
+      python: ["azure.cosmos.faults.FaultInjectionTransport"]
+      rust:   ["azure_data_cosmos::fault_injection"]
+    detection_hints:                       # per SDK, list of strings
+      rust:   ["fault_injection"]
+      dotnet: ["separate_package:Microsoft.Azure.Cosmos.FaultInjection"]
+    changelog_keywords:                    # flat list of strings
+      - "fault injection"
+      - "FaultInjection"
+  sdks:
+    # ... parity cells unchanged ...
+```
+
+All four sub-keys (`notes_for_reviewer`, `public_api_symbols`,
+`detection_hints`, `changelog_keywords`) are optional. Valid SDK ids are
+`dotnet`, `java`, `python`, `go`, `rust`.
+
+> Note: `detection_hints` is intentionally *not* reused as a runtime-opt-in
+> marker. Entries here are purely detection hints for scrapers (e.g.
+> "grep the Cargo.toml for this string") — they do not assert anything
+> about runtime behavior. Keep any future per-cell runtime-opt-in field
+> (e.g. `requires_opt_in`) distinct from this block.
+
+If a sub-key is present, its list must be non-empty; the validator
+rejects empty lists (omit the key instead).
+
+#### Item grammar for `public_api_symbols` and `detection_hints`
+
+Each string inside these per-SDK lists is interpreted by the scraper as
+follows:
+
+- **Plain string** (e.g. `"azure_data_cosmos::fault_injection"`) — matched
+  verbatim against symbols / flags / build tags inside the SDK's default
+  package (the package listed in `data/sdks.yaml` for that SDK).
+- **`separate_package:<crate-or-package-name>`** — instructs the scraper
+  to look inside a *different* package instead of the SDK's default
+  package. Use this when a feature ships in a sibling NuGet package,
+  companion crate, or test-only artifact.
+
+Example — Fault Injection ships in a separate NuGet on .NET and behind a
+Cargo feature on Rust:
+
+```yaml
+detection_hints:
+  rust:   ["fault_injection"]                                         # plain Cargo feature
+  dotnet: ["separate_package:Microsoft.Azure.Cosmos.FaultInjection"]  # look in this NuGet, not the main SDK package
+```
+
+### How the scripts consume it
+
+- **`scripts/scrape_changelogs.py`** — when matching changelog bullet
+  points to feature ids, now ANDs in a substring match against each
+  feature's `assessment.changelog_keywords` on top of the legacy
+  built-in `FEATURE_PATTERNS` regex table. Features without an
+  `assessment` block fall back to the legacy regex behavior, so this
+  change is fully backward compatible.
+- **`scripts/generate_snapshot.py`** — re-runs the same
+  assessment-keyword match over the scraped data and records the hits
+  under `assessment_keyword_hits` in the daily snapshot, as a stronger,
+  owner-curated signal alongside the existing `recent_features_detected`.
+- **`scripts/validate_features_schema.py`** — validates the optional
+  `assessment:` block's shape. Run it (or let the weekly workflow run it)
+  before any scraping.
+
+### Submitting an assessment PR
+
+SDK owners who want to refine detection for their SDK should open a PR
+that:
+
+1. Touches **only** the `assessment:` blocks of the features they own.
+2. Does **not** change `sdks:` parity cells (those are owned by whoever
+   audits the matrix as a whole).
+3. Passes `python scripts/validate_features_schema.py`.
+
+This keeps parity-review PRs and assessment-hint PRs orthogonal and easy
+to merge.
+
+
 ## Updating Retry Behavior
 
 `data/retries.yaml` describes, for each retry *scenario* (HTTP status + optional Cosmos sub-status)
@@ -158,14 +262,15 @@ calls the generic scraper with retry-specific arguments.
 
 `.github/workflows/update-parity.yml` runs every Monday at 06:00 UTC:
 
-1. Scrape SDK changelogs (`scrape_changelogs.py`)
-2. Scrape retry-policy source files, detect drift (`scrape_source_refs.py --data data/retries.yaml`)
-3. Scrape failover source files, detect drift (`scrape_source_refs.py --data data/failovers.yaml`)
-4. Scrape the Rust `azure_data_cosmos` public API + Cargo features from docs.rs, detect drift (`scrape_public_api_rust.py`). The Rust CHANGELOG misses features, so the public API surface is used as an additional signal when auditing `data/features.yaml`. Never auto-mutates curated YAML.
-5. Scrape public API surfaces across all SDKs (`scrape_public_api.py`, `continue-on-error`)
-6. Generate parity snapshot (`generate_snapshot.py`)
-7. Commit changed `data/` files
-8. Build and deploy the site
+1. Validate `data/features.yaml` schema incl. optional `assessment:` blocks (`validate_features_schema.py`)
+2. Scrape SDK changelogs (`scrape_changelogs.py`)
+3. Scrape retry-policy source files, detect drift (`scrape_source_refs.py --data data/retries.yaml`)
+4. Scrape failover source files, detect drift (`scrape_source_refs.py --data data/failovers.yaml`)
+5. Scrape the Rust `azure_data_cosmos` public API + Cargo features from docs.rs, detect drift (`scrape_public_api_rust.py`). The Rust CHANGELOG misses features, so the public API surface is used as an additional signal when auditing `data/features.yaml`. Never auto-mutates curated YAML.
+6. Scrape public API surfaces across all SDKs (`scrape_public_api.py`, `continue-on-error`)
+7. Generate parity snapshot (`generate_snapshot.py`)
+8. Commit changed `data/` files
+9. Build and deploy the site
 
 ## Public API surface scraper
 
