@@ -29,14 +29,32 @@ function TierChip({ tier }) {
   )
 }
 
-function IssueChips({ issues }) {
+function IssueChips({ issues, issuesIndex }) {
   if (!issues || issues.length === 0) return null
   return (
     <div className="inline-flex flex-wrap gap-0.5">
       {issues.map((issue, idx) => {
-        const m = /github\.com\/[^/]+\/[^/]+\/issues\/(\d+)/.exec(issue.url || '')
+        const m = /github\.com\/[^/]+\/[^/]+\/(?:issues|pull)\/(\d+)/.exec(issue.url || '')
         const label = m ? `#${m[1]}` : '🐛'
-        const tip = issue.title ? `${label}: ${issue.title}` : issue.url
+        const live = issuesIndex?.[issue.url]
+        const title = live?.title || issue.title
+        const state = live?.state
+        let icon = '🐛'
+        let klass = 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+        if (state === 'open') {
+          icon = '🟢'
+          klass = 'bg-green-50 text-green-800 border-green-300 hover:bg-green-100'
+        } else if (state === 'closed') {
+          if (live?.state_reason === 'not_planned') {
+            icon = '⚫'
+            klass = 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200'
+          } else {
+            icon = '🟣'
+            klass = 'bg-purple-50 text-purple-800 border-purple-300 hover:bg-purple-100'
+          }
+        }
+        const stateLabel = state ? ` [${state}${live?.state_reason ? `: ${live.state_reason}` : ''}]` : ''
+        const tip = title ? `${label}${stateLabel}: ${title}` : (issue.url + stateLabel)
         return (
           <a
             key={idx}
@@ -44,9 +62,9 @@ function IssueChips({ issues }) {
             target="_blank"
             rel="noopener noreferrer"
             title={tip}
-            className="inline-flex items-center px-1 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100"
+            className={`inline-flex items-center px-1 rounded text-[10px] font-medium border ${klass}`}
           >
-            🐛 {label}
+            {icon} {label}
           </a>
         )
       })}
@@ -103,7 +121,7 @@ function computeGaps(features, sdkOrder, targetSdk) {
   return rows
 }
 
-function GapsTable({ rows, sdks, targetSdk }) {
+function GapsTable({ rows, sdks, targetSdk, issuesIndex }) {
   // Group by category preserving category order.
   const byCategory = []
   const seen = new Map()
@@ -153,7 +171,7 @@ function GapsTable({ rows, sdks, targetSdk }) {
                       {row.otherGa.map(s => <SdkPill key={s} sdk={sdks[s]} />)}
                     </div>
                   </td>
-                  <td className="px-3 py-2"><IssueChips issues={row.issues} /></td>
+                  <td className="px-3 py-2"><IssueChips issues={row.issues} issuesIndex={issuesIndex} /></td>
                 </tr>
               ))}
             </React.Fragment>
@@ -164,7 +182,7 @@ function GapsTable({ rows, sdks, targetSdk }) {
   )
 }
 
-export default function GaReadinessView({ features, sdks, sdkOrder, targetSdk, onTargetSdkChange }) {
+export default function GaReadinessView({ features, sdks, sdkOrder, targetSdk, onTargetSdkChange, issuesIndex }) {
   const [copied, setCopied] = useState(false)
 
   const allGaps = useMemo(
@@ -241,7 +259,7 @@ export default function GaReadinessView({ features, sdks, sdkOrder, targetSdk, o
             🎉 No GA-blocker gaps for {sdks[targetSdk]?.name}.
           </div>
         ) : (
-          <GapsTable rows={mustHaveGaps} sdks={sdks} targetSdk={targetSdk} />
+          <GapsTable rows={mustHaveGaps} sdks={sdks} targetSdk={targetSdk} issuesIndex={issuesIndex} />
         )}
       </section>
 
@@ -259,7 +277,7 @@ export default function GaReadinessView({ features, sdks, sdkOrder, targetSdk, o
             No stretch gaps for {sdks[targetSdk]?.name}.
           </div>
         ) : (
-          <GapsTable rows={stretchGaps} sdks={sdks} targetSdk={targetSdk} />
+          <GapsTable rows={stretchGaps} sdks={sdks} targetSdk={targetSdk} issuesIndex={issuesIndex} />
         )}
       </section>
 
@@ -278,7 +296,7 @@ export default function GaReadinessView({ features, sdks, sdkOrder, targetSdk, o
             SDK team has explicitly deferred them past GA. Excluded from the
             blocker and stretch counts above.
           </p>
-          <GapsTable rows={deferredGaps} sdks={sdks} targetSdk={targetSdk} />
+          <GapsTable rows={deferredGaps} sdks={sdks} targetSdk={targetSdk} issuesIndex={issuesIndex} />
         </section>
       )}
     </div>
