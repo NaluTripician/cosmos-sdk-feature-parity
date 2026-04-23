@@ -18,6 +18,75 @@ const OPT_IN_LABELS = {
   preview_flag: 'Preview flag',
 }
 
+const TIER_CONFIG = {
+  ga_blocker: {
+    label: 'GA blocker',
+    bg: 'bg-rose-100',
+    text: 'text-rose-800',
+    border: 'border-rose-300',
+    icon: '🚧',
+    description: 'Must ship before this SDK goes GA',
+  },
+  post_ga: {
+    label: 'Post-GA',
+    bg: 'bg-slate-100',
+    text: 'text-slate-700',
+    border: 'border-slate-300',
+    icon: '⏭️',
+    description: 'Intentionally deferred past GA',
+  },
+  nice_to_have: {
+    label: 'Nice-to-have',
+    bg: 'bg-sky-50',
+    text: 'text-sky-700',
+    border: 'border-sky-200',
+    icon: '✨',
+    description: 'Low-priority; not blocking any milestone',
+  },
+}
+
+function TierBadge({ tier }) {
+  if (!tier) return null
+  const config = TIER_CONFIG[tier]
+  if (!config) return null
+  return (
+    <span
+      title={`${config.label} — ${config.description}`}
+      aria-label={`Tier: ${config.label}`}
+      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${config.bg} ${config.text} ${config.border} cursor-help`}
+    >
+      <span>{config.icon}</span>
+      <span>{config.label}</span>
+    </span>
+  )
+}
+
+function IssueLinks({ issues }) {
+  if (!issues || issues.length === 0) return null
+  return (
+    <div className="inline-flex flex-wrap gap-0.5 align-middle">
+      {issues.map((issue, idx) => {
+        const m = /github\.com\/[^/]+\/[^/]+\/issues\/(\d+)/.exec(issue.url || '')
+        const label = m ? `#${m[1]}` : '🐛'
+        const tip = issue.title ? `${label}: ${issue.title}` : issue.url
+        return (
+          <a
+            key={idx}
+            href={issue.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={tip}
+            onClick={e => e.stopPropagation()}
+            className="inline-flex items-center px-1 py-0 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100"
+          >
+            🐛 {label}
+          </a>
+        )
+      })}
+    </div>
+  )
+}
+
 function StatusCell({ sdkFeature }) {
   const status = sdkFeature?.status || 'not_started'
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.not_started
@@ -27,12 +96,16 @@ function StatusCell({ sdkFeature }) {
   const optInName = sdkFeature?.opt_in_name
   const publicApi = sdkFeature?.public_api
   const isInternalOnly = publicApi === false
+  const tier = sdkFeature?.tier
+  const issues = Array.isArray(sdkFeature?.issues) ? sdkFeature.issues : []
 
   const optInLabel = requiresOptIn ? (OPT_IN_LABELS[requiresOptIn] || requiresOptIn) : null
   const badgeTitle = [
     optInLabel && `Opt-in: ${optInLabel}${optInName ? ` (${optInName})` : ''}`,
     isInternalOnly && 'Internal-only API',
   ].filter(Boolean).join(' · ')
+
+  const hasTooltip = notes || requiresOptIn || isInternalOnly || tier
 
   return (
     <td className="px-2 py-2 text-center group relative">
@@ -52,11 +125,27 @@ function StatusCell({ sdkFeature }) {
           </span>
         )}
       </div>
+      {tier && (
+        <div className="mt-1 flex justify-center">
+          <TierBadge tier={tier} />
+        </div>
+      )}
       {since && (
         <div className="text-[10px] text-gray-400 mt-0.5">v{since}</div>
       )}
-      {(notes || requiresOptIn || isInternalOnly) && (
+      {issues.length > 0 && (
+        <div className="mt-1 flex justify-center">
+          <IssueLinks issues={issues} />
+        </div>
+      )}
+      {hasTooltip && (
         <div className="absolute z-10 hidden group-hover:block bg-gray-900 text-white text-xs rounded p-2 max-w-xs -translate-x-1/2 left-1/2 mt-1 shadow-lg text-left">
+          {tier && TIER_CONFIG[tier] && (
+            <div className="mb-1">
+              <span className="font-semibold">Tier:</span> {TIER_CONFIG[tier].label}
+              <div className="text-[10px] text-gray-300">{TIER_CONFIG[tier].description}</div>
+            </div>
+          )}
           {optInLabel && (
             <div className="mb-1">
               <span className="font-semibold">Opt-in:</span> {optInLabel}
@@ -81,10 +170,13 @@ export default function ParityMatrix({ features, sdks, sdkOrder, filter }) {
 
     const filteredFeatures = category.features.filter(feat => {
       if (filter === 'gaps') {
-        // Show features where at least one SDK has it and at least one doesn't
+        // A feature is a "gap" if at least one SDK has shipped (ga/preview)
+        // and at least one other SDK has NOT shipped. `in_progress` counts
+        // as "not shipped" — without it, a .NET-only in-progress feature
+        // would vanish from the Gaps view, making in-progress work invisible.
         const statuses = sdkOrder.map(sdk => feat.sdks?.[sdk]?.status || 'not_started')
         const hasGa = statuses.some(s => s === 'ga' || s === 'preview')
-        const hasMissing = statuses.some(s => s === 'not_started' || s === 'planned')
+        const hasMissing = statuses.some(s => s === 'not_started' || s === 'planned' || s === 'in_progress')
         return hasGa && hasMissing
       }
       return true

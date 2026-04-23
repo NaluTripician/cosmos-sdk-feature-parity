@@ -53,6 +53,23 @@ Quick summary:
   verify.
 - **`notes`** — short free-form context (e.g. "Removed for API redesign",
   "Gateway-mode only"). Keep to one line where possible.
+- **`tier`** *(optional)* — classifies the feature's priority for THIS SDK.
+  One of:
+  - `ga_blocker` — must ship before this SDK goes GA
+  - `post_ga` — intentionally deferred past GA (GA Readiness shows these
+    in a separate "Post-GA (deferred by design)" section and does NOT
+    count them as blockers)
+  - `nice_to_have` — low priority; not blocking any milestone
+- **`issues`** *(optional)* — list of tracking-issue links for this cell:
+  ```yaml
+  issues:
+    - url: https://github.com/Azure/azure-sdk-for-rust/issues/1234
+      title: "Add Change Feed Processor"   # optional
+  ```
+  Rendered as 🐛 chips in the parity matrix and GA Readiness view.
+  **Issue-label propagation** (mirroring `tier` onto the linked GitHub
+  issue) is a planned follow-up and requires write credentials — for now
+  this is a one-way read-only link.
 
 Bump the `# Last updated:` comment at the top of `features.yaml` when you
 land a change.

@@ -1,5 +1,5 @@
 # Cosmos DB SDK Feature Parity Matrix
-# Last updated: 2026-04-23 (audited against upstream SDK CHANGELOGs; Rust Availability & Resiliency reconciled against azure_data_cosmos source)
+# Last updated: 2026-04-23 (added Binary Encoding placeholder; corrected Rust vector/FTS policy notes; introduced per-cell tier + issues schema)
 #
 # Status values:
 #   ga           - Generally Available
@@ -9,6 +9,16 @@
 #   not_started  - No known plans
 #   removed      - Previously available, removed
 #   n_a          - Not applicable to this SDK
+#
+# Optional per-cell fields (orthogonal to status):
+#   tier         - one of "ga_blocker", "post_ga", "nice_to_have".
+#                  Classifies the feature's priority for THIS SDK. Used by
+#                  the GA Readiness view to separate must-ship-before-GA work
+#                  from intentionally-deferred-past-GA work (e.g. Rust CFP).
+#   issues       - list of { url: <gh-issue-url>, title?: <string> } entries.
+#                  Tracked work items for this SDK cell. Rendered as chips in
+#                  the parity matrix; propagation back to issue labels is a
+#                  separate workflow (see CONTRIBUTING.md).
 
 categories:
   - name: "Data Plane Operations"
@@ -81,6 +91,57 @@ categories:
           python: { status: "ga", since: "4.0.0" }
           go: { status: "not_started" }
           rust: { status: "preview", since: "0.25.0", notes: "Only pre/post triggers via ItemOptions (PR #2744). No StoredProcedureClient or UDF client in public surface." }
+
+      - id: binary_encoding
+        name: "Binary Encoding"
+        description: "Compact binary payload encoding for item operations to reduce parse/serialize overhead and storage footprint"
+        assessment:
+          notes_for_reviewer: |
+            Cosmos DB binary encoding has two halves: (a) service-side storage
+            optimization (transparent, no SDK change required — announced Sep
+            2024), and (b) SDK client-side opt-in that short-circuits
+            text→binary conversion for item stream APIs. This feature tracks
+            (b) only — a user-visible SDK option / env var that causes the
+            client to send/accept raw binary payloads.
+
+            .NET: landed under internal env var
+            `AZURE_COSMOS_BINARY_ENCODING_ENABLED` and an internal
+            `ItemRequestOptions.EnableBinaryResponseOnPointOperations`
+            (PR/issue #4718). A public `CosmosClientOptions` knob
+            (`EnableStreamConversationForBinaryEncoding`, default `true`) is
+            tracked in issue #5122 but not yet in the CHANGELOG by name —
+            treat as in-progress until a named release lands.
+
+            Python: tracked by azure-sdk-for-python issue #36587 (open);
+            no implementation yet.
+
+            Java/Go/Rust: no SDK-level opt-in surface found; service-side
+            benefit accrues automatically.
+          public_api_symbols:
+            dotnet: ["Microsoft.Azure.Cosmos.ItemRequestOptions.EnableBinaryResponseOnPointOperations", "Microsoft.Azure.Cosmos.CosmosClientOptions.EnableStreamConversationForBinaryEncoding"]
+          changelog_keywords: ["binary encoding", "BinaryEncoding", "EnableBinaryResponseOnPointOperations", "EnableStreamConversationForBinaryEncoding", "AZURE_COSMOS_BINARY_ENCODING_ENABLED"]
+        sdks:
+          dotnet:
+            status: "in_progress"
+            requires_opt_in: "env_var"
+            opt_in_name: "AZURE_COSMOS_BINARY_ENCODING_ENABLED"
+            notes: "Gated behind env var AZURE_COSMOS_BINARY_ENCODING_ENABLED and internal ItemRequestOptions.EnableBinaryResponseOnPointOperations. Public CosmosClientOptions knob (EnableStreamConversationForBinaryEncoding) tracked in issue #5122 but not yet in a named CHANGELOG release."
+            issues:
+              - url: https://github.com/Azure/azure-cosmos-dotnet-v3/issues/4718
+                title: "[Internal] Introduce Binary Encoding in .NET v3 SDK"
+              - url: https://github.com/Azure/azure-cosmos-dotnet-v3/issues/5122
+                title: "Add EnableStreamConversationForBinaryEncoding to CosmosClientOptions"
+          java:
+            status: "not_started"
+            notes: "No client-side opt-in surface found in CosmosClientBuilder / CosmosClientOptions. Service-side binary encoding benefits Java clients automatically; no SDK-level API gap reported upstream."
+          python:
+            status: "planned"
+            issues:
+              - url: https://github.com/Azure/azure-sdk-for-python/issues/36587
+                title: "[Cosmos] Binary Encoding"
+            notes: "Tracked as feature request in issue #36587 (open, no PR yet)."
+          go: { status: "not_started", notes: "No client-side opt-in surface; no upstream issue found." }
+          rust: { status: "not_started", notes: "No client-side opt-in surface; no upstream issue found." }
 
   - name: "Query"
     features:
@@ -155,7 +216,7 @@ categories:
           java: { status: "ga", since: "4.60.0" }
           python: { status: "ga", since: "4.7.0" }
           go: { status: "preview", since: "1.5.0-beta.1" }
-          rust: { status: "not_started", notes: "No vector index APIs found in azure_data_cosmos CHANGELOG through 0.31.0." }
+          rust: { status: "not_started", notes: "Partial: ContainerProperties in azure_data_cosmos::models exposes vector-index policy configuration, but query-side APIs (VectorDistance, VectorIndexSpec in SELECT, etc.) are not implemented. Promote once querying lands." }
 
       - id: full_text_search_index
         name: "Full-Text Search Indexing Policy"
@@ -165,7 +226,7 @@ categories:
           java: { status: "ga", since: "4.65.0", notes: "CosmosFullTextPolicy + CosmosFullTextIndexes added in 4.65.0 (PR #42278)." }
           python: { status: "ga", since: "4.9.0" }
           go: { status: "preview", since: "1.5.0-beta.1" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", notes: "Partial: ContainerProperties in azure_data_cosmos::models exposes full-text-search policy configuration, but query-side APIs (FullTextContains, FullTextScore, hybrid RRF) are not implemented." }
 
       - id: hybrid_search
         name: "Hybrid Search (Vector + FTS)"
@@ -244,7 +305,7 @@ categories:
         description: "Create client from a connection string"
         sdks:
           dotnet: { status: "ga", since: "3.0.0" }
-          java: { status: "ga", since: "4.0.0" }
+          java: { status: "not_started", notes: "CosmosClientBuilder does not expose a connection-string method; callers must parse the AccountEndpoint/AccountKey and pass them to .endpoint() + .key() separately." }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "ga", since: "0.3.2" }
           rust: { status: "ga", since: "0.24.0" }
@@ -363,7 +424,10 @@ categories:
           java: { status: "ga", since: "4.6.0" }
           python: { status: "not_started", notes: "Pull model only via query_items_change_feed(); no managed processor with leases" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust:
+            status: "not_started"
+            tier: "post_ga"
+            notes: "Intentionally deferred past Rust GA; tracked as post-GA work."
 
       - id: feed_ranges
         name: "Feed Ranges"

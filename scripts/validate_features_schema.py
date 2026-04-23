@@ -1,6 +1,7 @@
 """
 Validate data/features.yaml against the expected schema, including the
-optional per-feature `assessment` block.
+optional per-feature `assessment` block and per-cell `tier` / `issues`
+fields.
 
 The `assessment` block is OPTIONAL. When present, it must have the shape:
 
@@ -13,6 +14,16 @@ The `assessment` block is OPTIONAL. When present, it must have the shape:
       changelog_keywords: [<string>, ...]      # optional, must be non-empty if present
 
 where <sdk_id> is one of: dotnet, java, python, go, rust.
+
+Per-SDK cells MAY additionally include:
+
+    sdks:
+      rust:
+        status: not_started
+        tier: post_ga                          # one of ga_blocker | post_ga | nice_to_have
+        issues:                                # non-empty list if present
+          - url: https://github.com/Azure/azure-sdk-for-rust/issues/1234
+            title: "Optional human-friendly label"
 
 Empty lists are treated as validation errors (equivalent to a missing
 field — if the author has nothing to say, they should omit the key).
@@ -39,6 +50,18 @@ VALID_STATUSES = {
     "ga", "preview", "in_progress", "planned",
     "not_started", "removed", "n_a",
 }
+VALID_TIERS = {"ga_blocker", "post_ga", "nice_to_have"}
+
+# Fields allowed on a per-SDK cell. Validator only rejects *typing* errors
+# on the fields it knows about — unknown keys are tolerated for forward
+# compatibility (other fields like `since`, `notes`, `pr_url`,
+# `requires_opt_in`, `opt_in_name`, `public_api`, `source_ref` remain
+# free-form per existing schema docs).
+CELL_KNOWN_FIELDS = {
+    "status", "since", "notes", "pr_url",
+    "requires_opt_in", "opt_in_name", "public_api",
+    "tier", "issues",
+}
 
 ASSESSMENT_OPTIONAL_KEYS = {
     "notes_for_reviewer",
@@ -50,6 +73,40 @@ ASSESSMENT_OPTIONAL_KEYS = {
 
 def _err(errors: list[str], feature_id: str, msg: str) -> None:
     errors.append(f"[{feature_id}] {msg}")
+
+
+def _validate_issues(
+    errors: list[str], feature_id: str, sdk_id: str, value: object,
+) -> None:
+    if not isinstance(value, list):
+        _err(errors, feature_id, f"sdks.{sdk_id}.issues must be a list")
+        return
+    if len(value) == 0:
+        _err(errors, feature_id,
+             f"sdks.{sdk_id}.issues must not be empty; omit the key instead")
+        return
+    for idx, item in enumerate(value):
+        if not isinstance(item, dict):
+            _err(errors, feature_id,
+                 f"sdks.{sdk_id}.issues[{idx}] must be a mapping with "
+                 f"'url' (and optionally 'title')")
+            continue
+        url = item.get("url")
+        if not isinstance(url, str) or not url.strip():
+            _err(errors, feature_id,
+                 f"sdks.{sdk_id}.issues[{idx}].url must be a non-empty string")
+        elif not (url.startswith("http://") or url.startswith("https://")):
+            _err(errors, feature_id,
+                 f"sdks.{sdk_id}.issues[{idx}].url must be an http(s) URL")
+        title = item.get("title")
+        if title is not None and not isinstance(title, str):
+            _err(errors, feature_id,
+                 f"sdks.{sdk_id}.issues[{idx}].title must be a string if set")
+        unknown = set(item.keys()) - {"url", "title"}
+        if unknown:
+            _err(errors, feature_id,
+                 f"sdks.{sdk_id}.issues[{idx}] has unknown key(s): "
+                 f"{sorted(unknown)}")
 
 
 def _validate_sdk_keyed_list_of_strings(
@@ -145,6 +202,14 @@ def validate_feature(errors: list[str], feature: object) -> None:
             if status not in VALID_STATUSES:
                 _err(errors, feature_id,
                      f"sdks.{sdk_id}.status '{status}' is not a valid status")
+
+            if "tier" in cell and cell["tier"] not in VALID_TIERS:
+                _err(errors, feature_id,
+                     f"sdks.{sdk_id}.tier '{cell['tier']}' is not a valid "
+                     f"tier (expected one of {sorted(VALID_TIERS)})")
+
+            if "issues" in cell:
+                _validate_issues(errors, feature_id, sdk_id, cell["issues"])
 
     if "assessment" in feature:
         validate_assessment(errors, feature_id, feature["assessment"])
