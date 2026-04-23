@@ -47,6 +47,9 @@ def compute_parity_stats(features_data: dict) -> dict:
     """Compute parity statistics from the feature matrix."""
     sdk_ids = ["dotnet", "java", "python", "go", "rust"]
     stats = {sdk: {"ga": 0, "preview": 0, "in_progress": 0, "not_started": 0, "n_a": 0, "total": 0} for sdk in sdk_ids}
+    # Count cells with orthogonal availability nuance (opt-in gated or internal-only).
+    opt_in_counts = {sdk: 0 for sdk in sdk_ids}
+    internal_only_counts = {sdk: 0 for sdk in sdk_ids}
 
     total_features = 0
     for category in features_data.get("categories", []):
@@ -59,6 +62,10 @@ def compute_parity_stats(features_data: dict) -> dict:
                     category_key = status if status in stats[sdk_id] else "not_started"
                     stats[sdk_id][category_key] = stats[sdk_id].get(category_key, 0) + 1
                 stats[sdk_id]["total"] = total_features
+                if sdk_status.get("requires_opt_in"):
+                    opt_in_counts[sdk_id] += 1
+                if sdk_status.get("public_api") is False:
+                    internal_only_counts[sdk_id] += 1
 
     # Compute parity percentage (GA + preview vs total applicable)
     for sdk_id in sdk_ids:
@@ -67,8 +74,35 @@ def compute_parity_stats(features_data: dict) -> dict:
         stats[sdk_id]["parity_pct"] = round(
             (implemented / applicable * 100) if applicable > 0 else 0, 1
         )
+        stats[sdk_id]["opt_in_gated"] = opt_in_counts[sdk_id]
+        stats[sdk_id]["internal_only"] = internal_only_counts[sdk_id]
 
     return {"per_sdk": stats, "total_features": total_features}
+
+
+def collect_nuanced_cells(features_data: dict) -> list:
+    """Return cells that carry orthogonal availability fields (requires_opt_in / public_api)."""
+    sdk_ids = ["dotnet", "java", "python", "go", "rust"]
+    nuanced = []
+    for category in features_data.get("categories", []):
+        for feature in category.get("features", []):
+            for sdk_id in sdk_ids:
+                cell = feature.get("sdks", {}).get(sdk_id, {}) or {}
+                if cell.get("requires_opt_in") or cell.get("public_api") is False:
+                    entry = {
+                        "feature_id": feature.get("id"),
+                        "feature_name": feature.get("name"),
+                        "sdk": sdk_id,
+                        "status": cell.get("status"),
+                    }
+                    if cell.get("requires_opt_in"):
+                        entry["requires_opt_in"] = cell["requires_opt_in"]
+                    if cell.get("opt_in_name"):
+                        entry["opt_in_name"] = cell["opt_in_name"]
+                    if cell.get("public_api") is False:
+                        entry["public_api"] = False
+                    nuanced.append(entry)
+    return nuanced
 
 
 def generate_snapshot():
@@ -79,6 +113,7 @@ def generate_snapshot():
     sdks = load_sdks()
     scrape = load_latest_scrape()
     parity_stats = compute_parity_stats(features)
+    nuanced_cells = collect_nuanced_cells(features)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -86,6 +121,7 @@ def generate_snapshot():
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "date": timestamp,
         "parity_stats": parity_stats,
+        "nuanced_cells": nuanced_cells,
         "sdk_versions": {
             sdk_id: {
                 "latest_stable": sdk.get("latest_stable"),

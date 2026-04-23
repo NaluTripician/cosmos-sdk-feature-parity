@@ -54,6 +54,36 @@ Edit `data/features.yaml` to update feature status. Valid statuses:
 - `removed` — Previously available, removed
 - `n_a` — Not applicable to this SDK
 
+### Orthogonal per-cell availability fields
+
+The flat `status` enum can't capture every availability nuance (e.g. a feature that
+is shipped but gated behind a Cargo feature flag, a separate NuGet package, a
+system property, or an internal-only transport). Each per-SDK cell may optionally
+include the following orthogonal fields alongside `status`:
+
+- `requires_opt_in` — how a user must opt in. One of:
+  - `cargo_feature` — Rust Cargo feature flag (e.g. `fault_injection`)
+  - `system_property` — Java/JVM system property (e.g. `azure.cosmos.thinClientEnabled`)
+  - `separate_package` — shipped as a separate package (e.g. `Microsoft.Azure.Cosmos.FaultInjection`)
+  - `env_var` — environment variable
+  - `preview_flag` — preview/client-option flag (e.g. `CosmosClientOptions.EnablePartitionLevelCircuitBreaker`)
+- `opt_in_name` — the concrete flag / property / package / option name.
+- `public_api` — boolean. Defaults to `true` when absent. Set to `false` for
+  internal-only surfaces that aren't part of the public API, even when
+  `status` is `ga` or `preview` (e.g. Python `FaultInjectionTransport`).
+
+These fields are back-compatible: omitting them preserves current behavior. The
+dashboard renders a small badge (⚑ for opt-in, 🔒 for internal-only) next to the
+status pill, with a tooltip showing the opt-in name.
+
+Example:
+
+```yaml
+dotnet: { status: "ga", requires_opt_in: "separate_package", opt_in_name: "Microsoft.Azure.Cosmos.FaultInjection" }
+java:   { status: "preview", requires_opt_in: "system_property", opt_in_name: "azure.cosmos.thinClientEnabled", public_api: false }
+python: { status: "preview", public_api: false, notes: "test utility only" }
+```
+
 ## Updating Retry Behavior
 
 `data/retries.yaml` describes, for each retry *scenario* (HTTP status + optional Cosmos sub-status)

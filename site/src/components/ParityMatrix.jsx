@@ -10,24 +10,63 @@ const STATUS_CONFIG = {
   n_a: { label: 'N/A', bg: 'bg-gray-50', text: 'text-gray-400', dot: '➖' },
 }
 
+const OPT_IN_LABELS = {
+  cargo_feature: 'Cargo feature',
+  system_property: 'System property',
+  separate_package: 'Separate package',
+  env_var: 'Environment variable',
+  preview_flag: 'Preview flag',
+}
+
 function StatusCell({ sdkFeature }) {
   const status = sdkFeature?.status || 'not_started'
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.not_started
   const since = sdkFeature?.since
   const notes = sdkFeature?.notes
+  const requiresOptIn = sdkFeature?.requires_opt_in
+  const optInName = sdkFeature?.opt_in_name
+  const publicApi = sdkFeature?.public_api
+  const isInternalOnly = publicApi === false
+
+  const optInLabel = requiresOptIn ? (OPT_IN_LABELS[requiresOptIn] || requiresOptIn) : null
+  const badgeTitle = [
+    optInLabel && `Opt-in: ${optInLabel}${optInName ? ` (${optInName})` : ''}`,
+    isInternalOnly && 'Internal-only API',
+  ].filter(Boolean).join(' · ')
 
   return (
     <td className="px-2 py-2 text-center group relative">
-      <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
-        <span>{config.dot}</span>
-        <span>{config.label}</span>
+      <div className="inline-flex items-center gap-1">
+        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
+          <span>{config.dot}</span>
+          <span>{config.label}</span>
+        </div>
+        {(requiresOptIn || isInternalOnly) && (
+          <span
+            role="img"
+            aria-label={badgeTitle}
+            title={badgeTitle}
+            className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[10px] leading-none border border-amber-300 cursor-help"
+          >
+            {isInternalOnly && !requiresOptIn ? '🔒' : '⚑'}
+          </span>
+        )}
       </div>
       {since && (
         <div className="text-[10px] text-gray-400 mt-0.5">v{since}</div>
       )}
-      {notes && (
-        <div className="absolute z-10 hidden group-hover:block bg-gray-900 text-white text-xs rounded p-2 max-w-xs -translate-x-1/2 left-1/2 mt-1 shadow-lg">
-          {notes}
+      {(notes || requiresOptIn || isInternalOnly) && (
+        <div className="absolute z-10 hidden group-hover:block bg-gray-900 text-white text-xs rounded p-2 max-w-xs -translate-x-1/2 left-1/2 mt-1 shadow-lg text-left">
+          {optInLabel && (
+            <div className="mb-1">
+              <span className="font-semibold">Opt-in:</span> {optInLabel}
+              {optInName && <div className="font-mono text-[10px] break-all">{optInName}</div>}
+            </div>
+          )}
+          {isInternalOnly && (
+            <div className="mb-1"><span className="font-semibold">Internal-only</span> (not public API)</div>
+          )}
+          {notes && <div>{notes}</div>}
         </div>
       )}
     </td>

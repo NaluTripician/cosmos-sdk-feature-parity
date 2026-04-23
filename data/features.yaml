@@ -275,7 +275,7 @@ categories:
         name: "Per-Partition Circuit Breaker"
         description: "Circuit breaker pattern at partition level to avoid unhealthy replicas"
         sdks:
-          dotnet: { status: "ga", notes: "Feature exists as CosmosClientOptions.EnablePartitionLevelCircuitBreaker but is not called out by name in changelog.md; version unverified from changelog." }
+          dotnet: { status: "ga", requires_opt_in: "preview_flag", opt_in_name: "CosmosClientOptions.EnablePartitionLevelCircuitBreaker", notes: "Feature exists as CosmosClientOptions.EnablePartitionLevelCircuitBreaker but is not called out by name in changelog.md; version unverified from changelog." }
           java: { status: "ga", since: "4.63.1", notes: "Circuit breaker exception-tolerance fix in 4.63.1 (PR #41428)." }
           python: { status: "preview", since: "4.13.0b1" }
           go: { status: "not_started" }
@@ -414,7 +414,7 @@ categories:
         description: "Lightweight client routing through Gateway V2 proxy"
         sdks:
           dotnet: { status: "preview", since: "3.57.0" }
-          java: { status: "preview", since: "4.66.1", notes: "Internal-only thin client mode enabled via system property in 4.66.1 (PR #43937)." }
+          java: { status: "preview", since: "4.66.1", requires_opt_in: "system_property", opt_in_name: "azure.cosmos.thinClientEnabled", public_api: false, notes: "Internal-only thin client mode enabled via system property in 4.66.1 (PR #43937)." }
           python: { status: "not_started" }
           go: { status: "not_started" }
           rust: { status: "not_started" }
@@ -422,10 +422,15 @@ categories:
       - id: fault_injection
         name: "Fault Injection"
         description: "Simulate failures for resilience testing"
+        # Per-cell orthogonal fields (requires_opt_in, opt_in_name, public_api)
+        # describe availability nuances that the flat `status` enum can't.
+        # Once ft/rust-fault-injection-status merges, the rust cell here will
+        # express: status: "ga", requires_opt_in: "cargo_feature",
+        # opt_in_name: "fault_injection".
         sdks:
-          dotnet: { status: "ga", notes: "Exposed via separate Microsoft.Azure.Cosmos.FaultInjection NuGet package; not tracked in the main Microsoft.Azure.Cosmos changelog." }
+          dotnet: { status: "ga", requires_opt_in: "separate_package", opt_in_name: "Microsoft.Azure.Cosmos.FaultInjection", notes: "Exposed via separate Microsoft.Azure.Cosmos.FaultInjection NuGet package; not tracked in the main Microsoft.Azure.Cosmos changelog." }
           java: { status: "ga", since: "4.42.0", notes: "Fault injection support added in 4.42.0 (PR #33329)." }
-          python: { status: "preview", notes: "FaultInjectionTransport test utility; not yet public API" }
+          python: { status: "preview", public_api: false, notes: "FaultInjectionTransport test utility; not yet public API" }
           go: { status: "not_started" }
           rust: { status: "ga", since: "0.31.0", notes: "Opt-in via the `fault_injection` Cargo feature flag to avoid compiling testing utilities into production; API is stable and supported (not a preview API). Follow-up branch ft/status-taxonomy will express this as requires_opt_in: cargo_feature." }
 
