@@ -126,17 +126,35 @@ Omitting the map falls back to the defaults shown above.
 
 ### Editing tiers from the site (no PR required up front)
 
-The parity site has an **"✏️ Edit tiers"** toggle next to the filter buttons.
-Turning it on replaces each cell's tier badge with a dropdown. Staged
-changes are tracked locally (nothing is submitted yet) and a floating panel
-summarises them.
+The parity site has an **"✏️ Edit tiers"** toggle next to the filter
+buttons. It is **gated on @Azure GitHub org membership** — the button
+appears as **"🔒 Sign in to edit (Azure members)"** until you verify.
 
-Clicking **⬇️ Download patch (JSON)** saves a file like:
+Signing in:
+
+1. Generate a GitHub Personal Access Token with the `read:org` scope
+   (classic token is easiest; fine-grained works too as long as it can
+   read your org memberships).
+2. Click the sign-in button and paste the token.
+3. The browser calls `GET /user/memberships/orgs/Azure` once to verify,
+   then stores the token in **sessionStorage** only (it is cleared
+   when the tab closes). The token is only ever sent to
+   `api.github.com` — never to any other host.
+4. If you are an active member, the edit toggle appears. Sign out
+   clears the token and resets edit mode.
+
+This gate is **advisory** — the site is static so there is no server
+to enforce it. Real enforcement happens at PR review time (anyone can
+apply the patch locally, but only maintainers can merge the change).
+
+Once in edit mode, adjust cells via dropdowns and hit
+**⬇️ Download patch (JSON)**:
 
 ```json
 {
   "generated_at": "2026-04-23T15:00:00.000Z",
   "generated_by": "parity-site/tier-editor",
+  "generated_by_user": "alice",
   "changes": [
     {"feature_id": "binary_encoding", "sdk_id": "java", "tier": "nice_to_have"},
     {"feature_id": "change_feed_processor", "sdk_id": "rust", "tier": null}
