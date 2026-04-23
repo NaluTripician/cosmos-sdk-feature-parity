@@ -24,6 +24,9 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r scripts/requirements.txt
 
+      - name: Validate features.yaml schema (incl. optional assessment block)
+        run: python scripts/validate_features_schema.py
+
       - name: Scrape changelogs from SDK repos
         id: scrape_changelogs
         env:

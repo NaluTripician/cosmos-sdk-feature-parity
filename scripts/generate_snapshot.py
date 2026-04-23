@@ -10,6 +10,7 @@ Usage:
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -41,6 +42,44 @@ def load_latest_scrape() -> dict | None:
         with open(latest_path, "r") as f:
             return json.load(f)
     return None
+
+
+def build_assessment_keyword_index(features_data: dict) -> dict[str, list[str]]:
+    """
+    Build a map of feature_id -> [changelog_keyword, ...] from each feature's
+    optional `assessment.changelog_keywords` block.
+
+    Features without an `assessment` block are omitted, preserving the legacy
+    regex-based keyword detection in scrape_changelogs.py.
+    """
+    index: dict[str, list[str]] = {}
+    for category in features_data.get("categories", []) or []:
+        for feature in category.get("features", []) or []:
+            if not isinstance(feature, dict):
+                continue
+            assessment = feature.get("assessment") or {}
+            keywords = assessment.get("changelog_keywords") or []
+            if keywords and isinstance(keywords, list):
+                index[feature["id"]] = [k for k in keywords if isinstance(k, str)]
+    return index
+
+
+def match_features_by_assessment(
+    text: str, keyword_index: dict[str, list[str]],
+) -> list[str]:
+    """
+    Return feature ids whose `assessment.changelog_keywords` appear in `text`
+    (case-insensitive substring match). This is an additional, stronger signal
+    on top of the legacy regex-based detection in scrape_changelogs.py.
+    """
+    lowered = text.lower()
+    hits: list[str] = []
+    for feature_id, keywords in keyword_index.items():
+        for kw in keywords:
+            if kw.lower() in lowered:
+                hits.append(feature_id)
+                break
+    return hits
 
 
 def compute_parity_stats(features_data: dict) -> dict:
@@ -114,6 +153,7 @@ def generate_snapshot():
     scrape = load_latest_scrape()
     parity_stats = compute_parity_stats(features)
     nuanced_cells = collect_nuanced_cells(features)
+    assessment_keywords = build_assessment_keyword_index(features)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -142,6 +182,34 @@ def generate_snapshot():
             for sdk_id, data in scrape.get("sdks", {}).items()
             if "error" not in data
         }
+
+        # Stronger signal: re-match each SDK's recent changelog texts against
+        # per-feature `assessment.changelog_keywords`. Features without an
+        # assessment block are simply absent from the index, preserving the
+        # legacy regex detection already stored on the scrape under
+        # `recent_features_detected`.
+        if assessment_keywords:
+            assessment_hits: dict[str, dict[str, list[str]]] = {}
+            for sdk_id, data in scrape.get("sdks", {}).items():
+                if "error" in data:
+                    continue
+                per_feature: dict[str, list[str]] = {}
+                for feature_text_info in (
+                    data.get("recent_features_detected") or {}
+                ).values():
+                    text = feature_text_info.get("text", "") if isinstance(
+                        feature_text_info, dict
+                    ) else ""
+                    if not text:
+                        continue
+                    for feat_id in match_features_by_assessment(
+                        text, assessment_keywords
+                    ):
+                        per_feature.setdefault(feat_id, []).append(text[:200])
+                if per_feature:
+                    assessment_hits[sdk_id] = per_feature
+            if assessment_hits:
+                snapshot["assessment_keyword_hits"] = assessment_hits
 
     # Save timestamped snapshot
     output_path = HISTORY_DIR / f"{timestamp}.json"
