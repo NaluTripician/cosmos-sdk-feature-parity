@@ -1,5 +1,5 @@
 # Cosmos DB SDK Feature Parity Matrix
-# Last updated: 2026-04-21 (audited against upstream SDK CHANGELOGs)
+# Last updated: 2026-04-23 (Rust client-side query engine correction per Ashley feedback)
 #
 # Status values:
 #   ga           - Generally Available
@@ -93,7 +93,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "ga", since: "1.3.0", notes: "Limited to gateway-served queries; full support via client engine in beta" }
-          rust: { status: "ga", since: "0.24.0", notes: "Limited to gateway-served; preview_query_engine feature flag for full support" }
+          rust: { status: "ga", since: "0.24.0", notes: "Limited to gateway-served queries" }
 
       - id: linq_query
         name: "LINQ Query Support"
@@ -113,7 +113,7 @@ categories:
           java: { status: "ga", since: "4.0.0", notes: "Native query pipeline" }
           python: { status: "not_started" }
           go: { status: "preview", since: "1.5.0-beta.0", notes: "Via azure-cosmos-client-engine (Rust)" }
-          rust: { status: "preview", since: "0.24.0", notes: "Behind preview_query_engine feature flag" }
+          rust: { status: "not_started" }
 
       - id: query_advisor
         name: "Query Advisor"
