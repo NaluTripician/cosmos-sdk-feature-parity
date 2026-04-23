@@ -32,6 +32,7 @@ export default function App() {
   const [scrapeData, setScrapeData] = useState(null)
   const [lastRun, setLastRun] = useState(null)
   const [recentPrs, setRecentPrs] = useState(null)
+  const [issuesIndex, setIssuesIndex] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('all') // all, gaps
@@ -115,6 +116,17 @@ export default function App() {
           }
         } catch (e) {
           // Optional
+        }
+
+        // Try to load live-issue state cache written by sync-issues workflow.
+        try {
+          const issuesResp = await fetch(`${base}data/scraped/issues.json`)
+          if (issuesResp.ok) {
+            const payload = await issuesResp.json()
+            setIssuesIndex(payload?.issues || null)
+          }
+        } catch (e) {
+          // Optional — falls back to static title/url rendering.
         }
 
         setLoading(false)
@@ -317,6 +329,7 @@ export default function App() {
               sdks={sdks}
               sdkOrder={SDK_ORDER}
               filter={filter}
+              issuesIndex={issuesIndex}
             />
           </>
         )}
@@ -404,6 +417,7 @@ export default function App() {
             sdkOrder={SDK_ORDER}
             targetSdk={gaTargetSdk}
             onTargetSdkChange={setGaTargetSdk}
+            issuesIndex={issuesIndex}
           />
         )}
       </main>

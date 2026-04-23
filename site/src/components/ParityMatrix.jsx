@@ -61,14 +61,34 @@ function TierBadge({ tier }) {
   )
 }
 
-function IssueLinks({ issues }) {
+function IssueLinks({ issues, issuesIndex }) {
   if (!issues || issues.length === 0) return null
   return (
     <div className="inline-flex flex-wrap gap-0.5 align-middle">
       {issues.map((issue, idx) => {
-        const m = /github\.com\/[^/]+\/[^/]+\/issues\/(\d+)/.exec(issue.url || '')
+        const m = /github\.com\/[^/]+\/[^/]+\/(?:issues|pull)\/(\d+)/.exec(issue.url || '')
         const label = m ? `#${m[1]}` : '🐛'
-        const tip = issue.title ? `${label}: ${issue.title}` : issue.url
+        const live = issuesIndex?.[issue.url]
+        const title = live?.title || issue.title
+        const state = live?.state
+        // Prefer live state when available; fall back to neutral styling.
+        let icon = '🐛'
+        let stateClass = 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+        if (state === 'open') {
+          icon = '🟢'
+          stateClass = 'bg-green-50 text-green-800 border-green-300 hover:bg-green-100'
+        } else if (state === 'closed') {
+          const reason = live?.state_reason
+          if (reason === 'not_planned') {
+            icon = '⚫'
+            stateClass = 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200'
+          } else {
+            icon = '🟣'
+            stateClass = 'bg-purple-50 text-purple-800 border-purple-300 hover:bg-purple-100'
+          }
+        }
+        const stateLabel = state ? ` [${state}${live?.state_reason ? `: ${live.state_reason}` : ''}]` : ''
+        const tip = title ? `${label}${stateLabel}: ${title}` : (issue.url + stateLabel)
         return (
           <a
             key={idx}
@@ -77,9 +97,9 @@ function IssueLinks({ issues }) {
             rel="noopener noreferrer"
             title={tip}
             onClick={e => e.stopPropagation()}
-            className="inline-flex items-center px-1 py-0 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100"
+            className={`inline-flex items-center px-1 py-0 rounded text-[10px] font-medium border ${stateClass}`}
           >
-            🐛 {label}
+            {icon} {label}
           </a>
         )
       })}
@@ -87,7 +107,7 @@ function IssueLinks({ issues }) {
   )
 }
 
-function StatusCell({ sdkFeature }) {
+function StatusCell({ sdkFeature, issuesIndex }) {
   const status = sdkFeature?.status || 'not_started'
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.not_started
   const since = sdkFeature?.since
@@ -135,7 +155,7 @@ function StatusCell({ sdkFeature }) {
       )}
       {issues.length > 0 && (
         <div className="mt-1 flex justify-center">
-          <IssueLinks issues={issues} />
+          <IssueLinks issues={issues} issuesIndex={issuesIndex} />
         </div>
       )}
       {hasTooltip && (
@@ -162,7 +182,7 @@ function StatusCell({ sdkFeature }) {
   )
 }
 
-export default function ParityMatrix({ features, sdks, sdkOrder, filter }) {
+export default function ParityMatrix({ features, sdks, sdkOrder, filter, issuesIndex }) {
   if (!features?.categories) return null
 
   const filteredCategories = features.categories.map(category => {
@@ -215,7 +235,7 @@ export default function ParityMatrix({ features, sdks, sdkOrder, filter }) {
                     )}
                   </td>
                   {sdkOrder.map(sdkId => (
-                    <StatusCell key={sdkId} sdkFeature={feature.sdks?.[sdkId]} />
+                    <StatusCell key={sdkId} sdkFeature={feature.sdks?.[sdkId]} issuesIndex={issuesIndex} />
                   ))}
                 </tr>
               ))}
