@@ -87,6 +87,10 @@ jobs:
         run: python scripts/scrape_public_api_rust.py
         continue-on-error: true
 
+      - name: Scrape public API surfaces (signal-only, never mutates curated data)
+        continue-on-error: true
+        run: python scripts/scrape_public_api.py
+
       - name: Generate parity snapshot
         if: steps.scrape_gate.outputs.ok == 'true'
         run: python scripts/generate_snapshot.py
