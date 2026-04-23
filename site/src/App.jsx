@@ -8,8 +8,21 @@ import RetryStats from './components/RetryStats.jsx'
 import FailoverMatrix from './components/FailoverMatrix.jsx'
 import FailoverStats from './components/FailoverStats.jsx'
 import RecentPrs from './components/RecentPrs.jsx'
+import GaReadinessView from './components/GaReadinessView.jsx'
 
 const SDK_ORDER = ['dotnet', 'java', 'python', 'go', 'rust']
+const VALID_TABS = new Set(['features', 'retries', 'failovers', 'recent', 'ga-readiness'])
+
+function readInitialUrlState() {
+  if (typeof window === 'undefined') return { tab: 'features', sdk: 'rust' }
+  const params = new URLSearchParams(window.location.search)
+  const tab = params.get('tab')
+  const sdk = params.get('sdk')
+  return {
+    tab: VALID_TABS.has(tab) ? tab : 'features',
+    sdk: SDK_ORDER.includes(sdk) ? sdk : 'rust',
+  }
+}
 
 export default function App() {
   const [features, setFeatures] = useState(null)
@@ -22,7 +35,22 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('all') // all, gaps
-  const [tab, setTab] = useState('features') // features, retries, failovers
+  const initialUrl = readInitialUrlState()
+  const [tab, setTab] = useState(initialUrl.tab) // features, retries, failovers, ga-readiness
+  const [gaTargetSdk, setGaTargetSdk] = useState(initialUrl.sdk)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    params.set('tab', tab)
+    if (tab === 'ga-readiness') {
+      params.set('sdk', gaTargetSdk)
+    } else {
+      params.delete('sdk')
+    }
+    const newUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`
+    window.history.replaceState({}, '', newUrl)
+  }, [tab, gaTargetSdk])
 
   useEffect(() => {
     async function loadData() {
@@ -236,9 +264,14 @@ export default function App() {
               { id: 'retries', label: '🔁 Retries' },
               { id: 'failovers', label: '🌐 Failovers' },
               { id: 'recent', label: '🆕 Recent Activity' },
+              { id: 'ga-readiness', label: '🚀 GA Readiness' },
             ].map(t => (
               <button
                 key={t.id}
+                role="tab"
+                aria-selected={tab === t.id}
+                aria-controls={`${t.id}-panel`}
+                id={`${t.id}-tab`}
                 onClick={() => setTab(t.id)}
                 className={`px-4 py-2 text-sm font-medium rounded-t-md -mb-px border-b-2 transition-colors ${
                   tab === t.id
@@ -362,6 +395,16 @@ export default function App() {
               filter={filter}
             />
           </>
+        )}
+
+        {tab === 'ga-readiness' && (
+          <GaReadinessView
+            features={features}
+            sdks={sdks}
+            sdkOrder={SDK_ORDER}
+            targetSdk={gaTargetSdk}
+            onTargetSdkChange={setGaTargetSdk}
+          />
         )}
       </main>
 

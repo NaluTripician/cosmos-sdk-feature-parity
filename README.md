@@ -23,8 +23,8 @@ A private dashboard tracking feature parity — and retry behavior — across al
 2. **`data/retries.yaml`** — Curated retry-behavior × SDK × connection-mode matrix (source of truth)
 3. **`data/failovers.yaml`** — Curated multi-region / failover × SDK matrix (source of truth)
 4. **`data/sdks.yaml`** — SDK metadata (repos, changelog paths, versions)
-5. **`scripts/`** — Python scripts to scrape changelogs, scrape SDK PRs, scrape the Rust public API from docs.rs, detect source-file drift, and build snapshots
-6. **`site/`** — Static React dashboard (deployed to GitHub Pages) with **Features**, **Retries**, **Failovers**, and **Recent Activity** tabs
+5. **`scripts/`** — Python scripts to scrape changelogs, scrape SDK PRs, scrape public API surfaces (Rust docs.rs + all-SDK), detect source-file drift, and build snapshots
+6. **`site/`** — Static React dashboard (deployed to GitHub Pages) with **Features**, **Retries**, **Failovers**, **Recent Activity**, and **GA Readiness** tabs. The **GA Readiness** tab lets any SDK lead pick a target SDK (defaults to Rust) and see the feature gaps where their SDK is behind while ≥2 other SDKs are already GA — i.e., the likely GA blockers. Share the view with `?tab=ga-readiness&sdk=<sdk>`.
 7. **`.github/workflows/`** — Weekly cron to update data and redeploy
 
 ## Quick Start
