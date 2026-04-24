@@ -1,5 +1,5 @@
 # Cosmos DB SDK Feature Parity Matrix
-# Last updated: 2026-04-23 (added Binary Encoding placeholder; corrected Rust vector/FTS policy notes; introduced per-cell tier + issues schema)
+# Last updated: 2026-04-24 (Updated Rust Feature Matrix and Tiers)
 #
 # Status values:
 #   ga           - Generally Available
