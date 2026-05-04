@@ -1,5 +1,5 @@
 # Cosmos DB SDK Feature Parity Matrix
-# Last updated: 2026-04-23 (added Binary Encoding placeholder; corrected Rust vector/FTS policy notes; introduced per-cell tier + issues schema)
+# Last updated: 2026-04-24 (Updated Rust Feature Matrix and Tiers)
 #
 # Status values:
 #   ga           - Generally Available
@@ -40,7 +40,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "ga", since: "0.1.0" }
-          rust: { status: "ga", since: "0.22.0" }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.22.0" }
 
       - id: patch_item
         name: "Patch Item"
@@ -50,7 +50,7 @@ categories:
           java: { status: "ga", since: "4.32.0" }
           python: { status: "ga", since: "4.7.0" }
           go: { status: "ga", since: "0.3.3" }
-          rust: { status: "removed", since: "0.31.0", notes: "Removed for API redesign; use Read/Modify/Replace with ETag concurrency" }
+          rust: { status: "removed", tier: "ga_blocker", since: "0.31.0", notes: "Removed for API redesign; plan to restore with clear documentation" }
 
       - id: transactional_batch
         name: "Transactional Batch"
@@ -60,7 +60,7 @@ categories:
           java: { status: "ga", since: "4.7.0" }
           python: { status: "ga", since: "4.3.0" }
           go: { status: "ga", since: "0.3.1" }
-          rust: { status: "ga", since: "0.31.0" }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.31.0" }
 
       - id: bulk_operations
         name: "Bulk Operations"
@@ -70,7 +70,7 @@ categories:
           java: { status: "ga", since: "4.9.0" }
           python: { status: "not_started", notes: "No dedicated bulk API; use transactional batch or individual operations" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "post_ga" }
 
       - id: read_many
         name: "ReadMany / ReadItems"
@@ -80,7 +80,7 @@ categories:
           java: { status: "ga", since: "4.14.0", notes: "readMany() GA in 4.14.0 (2021-04-06)" }
           python: { status: "ga", since: "4.14.0b3", notes: "read_items API" }
           go: { status: "preview", since: "1.5.0-beta.2" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "ga_blocker" }
 
       - id: stored_procedures
         name: "Stored Procedures / Triggers / UDFs"
@@ -90,7 +90,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "not_started" }
-          rust: { status: "preview", since: "0.25.0", notes: "Only pre/post triggers via ItemOptions (PR #2744). No StoredProcedureClient or UDF client in public surface." }
+          rust: { status: "not_started", tier: "post_ga", notes: "Not planned for GA." }
 
       - id: binary_encoding
         name: "Binary Encoding"
@@ -141,7 +141,7 @@ categories:
                 title: "[Cosmos] Binary Encoding"
             notes: "Tracked as feature request in issue #36587 (open, no PR yet)."
           go: { status: "not_started", notes: "No client-side opt-in surface; no upstream issue found." }
-          rust: { status: "not_started", notes: "No client-side opt-in surface; no upstream issue found." }
+          rust: { status: "not_started", tier: "post_ga", notes: "Not planned for GA" }
 
   - name: "Query"
     features:
@@ -153,7 +153,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "ga", since: "0.3.0" }
-          rust: { status: "ga", since: "0.22.0" }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.22.0" }
 
       - id: query_cross_partition
         name: "Cross-Partition Query"
@@ -163,7 +163,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "ga", since: "1.3.0", notes: "Limited to gateway-served queries; full support via client engine in beta" }
-          rust: { status: "ga", since: "0.24.0", notes: "Limited to gateway-served queries" }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.24.0", notes: "Limited to gateway-served queries" }
 
       - id: linq_query
         name: "LINQ Query Support"
@@ -194,7 +194,7 @@ categories:
           java: { status: "ga", since: "4.0.0", notes: "Native query pipeline" }
           python: { status: "not_started" }
           go: { status: "preview", since: "1.5.0-beta.0", notes: "Via azure-cosmos-client-engine (Rust)" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "ga_blocker" }
 
       - id: query_advisor
         name: "Query Advisor"
@@ -204,7 +204,7 @@ categories:
           java: { status: "ga", since: "4.79.0" }
           python: { status: "preview", since: "4.16.0b1" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "ga_blocker" }
 
   - name: "Indexing & Search"
     features:
@@ -216,7 +216,7 @@ categories:
           java: { status: "ga", since: "4.60.0" }
           python: { status: "ga", since: "4.7.0" }
           go: { status: "preview", since: "1.5.0-beta.1" }
-          rust: { status: "not_started", notes: "Partial: ContainerProperties in azure_data_cosmos::models exposes vector-index policy configuration, but query-side APIs (VectorDistance, VectorIndexSpec in SELECT, etc.) are not implemented. Promote once querying lands." }
+          rust: { status: "not_started", tier: "ga_blocker", notes: "Partial: ContainerProperties in azure_data_cosmos::models exposes vector-index policy configuration, but query-side APIs (VectorDistance, VectorIndexSpec in SELECT, etc.) are not implemented. Promote once querying lands." }
 
       - id: full_text_search_index
         name: "Full-Text Search Indexing Policy"
@@ -226,7 +226,7 @@ categories:
           java: { status: "ga", since: "4.65.0", notes: "CosmosFullTextPolicy + CosmosFullTextIndexes added in 4.65.0 (PR #42278)." }
           python: { status: "ga", since: "4.9.0" }
           go: { status: "preview", since: "1.5.0-beta.1" }
-          rust: { status: "not_started", notes: "Partial: ContainerProperties in azure_data_cosmos::models exposes full-text-search policy configuration, but query-side APIs (FullTextContains, FullTextScore, hybrid RRF) are not implemented." }
+          rust: { status: "not_started", tier: "ga_blocker", notes: "Partial: ContainerProperties in azure_data_cosmos::models exposes full-text-search policy configuration, but query-side APIs (FullTextContains, FullTextScore, hybrid RRF) are not implemented." }
 
       - id: hybrid_search
         name: "Hybrid Search (Vector + FTS)"
@@ -236,7 +236,7 @@ categories:
           java: { status: "ga", since: "4.65.0", notes: "HybridSearch + CountIf query features added in 4.65.0 (PR #42885)." }
           python: { status: "ga", since: "4.9.0" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "ga_blocker" }
 
       - id: semantic_reranking
         name: "Semantic Reranking"
@@ -246,7 +246,7 @@ categories:
           java: { status: "not_started" }
           python: { status: "preview", since: "4.14.0" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "post_ga", notes: "Not planned for GA" }
 
       - id: float16_vector
         name: "Float16 Vector Data Type"
@@ -256,7 +256,7 @@ categories:
           java: { status: "ga", since: "4.70.0" }
           python: { status: "not_started" }
           go: { status: "preview", since: "1.5.0-beta.5" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "ga_blocker" }
 
       - id: quantizer_type
         name: "QuantizerType (Vector Index)"
@@ -266,7 +266,7 @@ categories:
           java: { status: "ga", since: "4.77.0" }
           python: { status: "not_started" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "ga_blocker" }
 
       - id: full_text_score_scope
         name: "Full-Text Score Scope (BM25)"
@@ -276,7 +276,7 @@ categories:
           java: { status: "ga", since: "4.79.0" }
           python: { status: "preview", since: "4.16.0b1" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "ga_blocker" }
 
   - name: "Authentication"
     features:
@@ -288,7 +288,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "ga", since: "0.1.0" }
-          rust: { status: "ga", since: "0.22.0", notes: "Behind key_auth feature flag" }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.22.0", notes: "Behind key_auth feature flag" }
 
       - id: aad_auth
         name: "Entra ID (AAD) Authentication"
@@ -298,7 +298,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "ga", since: "0.3.0" }
-          rust: { status: "ga", since: "0.22.0" }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.22.0" }
 
       - id: connection_string
         name: "Connection String Auth"
@@ -308,7 +308,7 @@ categories:
           java: { status: "not_started", notes: "CosmosClientBuilder does not expose a connection-string method; callers must parse the AccountEndpoint/AccountKey and pass them to .endpoint() + .key() separately." }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "ga", since: "0.3.2" }
-          rust: { status: "ga", since: "0.24.0" }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.24.0" }
 
   - name: "Availability & Resiliency"
     features:
@@ -320,7 +320,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "ga", since: "1.0.0" }
-          rust: { status: "ga", since: "0.29.0", notes: "CosmosClientBuilder::with_application_region (options/mod.rs::CosmosClientOptions.application_region, clients/cosmos_client_builder.rs) generates a proximity-ordered preferred-region list via region_proximity::generate_preferred_region_list; added in 0.29.0 (#3274), with_application_preferred_regions replaced by with_application_region in 0.31.0 (#3796). The per-region ordered list is not user-supplied." }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.29.0", notes: "CosmosClientBuilder::with_application_region (options/mod.rs::CosmosClientOptions.application_region, clients/cosmos_client_builder.rs) generates a proximity-ordered preferred-region list via region_proximity::generate_preferred_region_list; added in 0.29.0 (#3274), with_application_preferred_regions replaced by with_application_region in 0.31.0 (#3796). The per-region ordered list is not user-supplied." }
 
       - id: multi_region_writes
         name: "Multi-Region Writes"
@@ -330,7 +330,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "ga", since: "1.4.1" }
-          rust: { status: "ga", since: "0.31.0", notes: "Basic multi-region writes (#3482, #3495). routing/location_cache.rs::can_support_multiple_write_locations enables tentative writes (ALLOW_TENTATIVE_WRITES header set in retry_policies/client_retry_policy.rs::before_send_request) for Documents and StoredProcedures.Execute when account exposes >1 write endpoint." }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.31.0", notes: "Basic multi-region writes (#3482, #3495). routing/location_cache.rs::can_support_multiple_write_locations enables tentative writes (ALLOW_TENTATIVE_WRITES header set in retry_policies/client_retry_policy.rs::before_send_request) for Documents and StoredProcedures.Execute when account exposes >1 write endpoint." }
 
       - id: cross_region_hedging
         name: "Cross-Region Hedging / Availability Strategy"
@@ -347,7 +347,7 @@ categories:
           java: { status: "ga", since: "4.53.0", notes: "EndToEndOperationLatencyPolicyConfig.availabilityStrategy introduced around 4.53.0 (PR #37511)." }
           python: { status: "ga", since: "4.15.0" }
           go: { status: "not_started" }
-          rust: { status: "not_started", notes: "No AvailabilityStrategy / hedging code in sdk/cosmos/azure_data_cosmos as of 0.31.0 (code search for 'hedging' / 'availability_strategy' returns zero results)." }
+          rust: { status: "not_started", tier: "ga_blocker", notes: "No AvailabilityStrategy / hedging code in sdk/cosmos/azure_data_cosmos as of 0.31.0 (code search for 'hedging' / 'availability_strategy' returns zero results)." }
 
       - id: ppaf
         name: "Per-Partition Automatic Failover (PPAF)"
@@ -364,7 +364,7 @@ categories:
           java: { status: "ga", since: "4.69.0", notes: "Per-Partition Automatic Failover first appears around 4.69.0." }
           python: { status: "ga", since: "4.15.0" }
           go: { status: "not_started" }
-          rust: { status: "not_started", notes: "PPAF logic exists in routing/global_partition_endpoint_manager.rs (partition_level_automatic_failover_enabled flag, partition_key_range_to_location_for_write map) and retry_policies/client_retry_policy.rs (try_mark_endpoint_unavailable_for_pk_range on 403/3, is_request_eligible_for_per_partition_automatic_failover), but clients/cosmos_client_builder.rs hard-codes GlobalPartitionEndpointManager::new(gem, false, true) → PPAF disabled at build and not exposed on CosmosClientOptions." }
+          rust: { status: "not_started", tier: "ga_blocker", notes: "PPAF logic exists in routing/global_partition_endpoint_manager.rs (partition_level_automatic_failover_enabled flag, partition_key_range_to_location_for_write map) and retry_policies/client_retry_policy.rs (try_mark_endpoint_unavailable_for_pk_range on 403/3, is_request_eligible_for_per_partition_automatic_failover), but clients/cosmos_client_builder.rs hard-codes GlobalPartitionEndpointManager::new(gem, false, true) → PPAF disabled at build and not exposed on CosmosClientOptions." }
 
       - id: per_partition_circuit_breaker
         name: "Per-Partition Circuit Breaker"
@@ -374,7 +374,7 @@ categories:
           java: { status: "ga", since: "4.63.1", notes: "Circuit breaker exception-tolerance fix in 4.63.1 (PR #41428)." }
           python: { status: "preview", since: "4.13.0b1" }
           go: { status: "not_started" }
-          rust: { status: "preview", since: "0.30.0", notes: "Partition-level circuit breaker is implemented and hard-enabled by the builder in clients/cosmos_client_builder.rs via GlobalPartitionEndpointManager::new(gem, false, true). Defaults in routing/global_partition_endpoint_manager.rs: consecutive read-failure threshold = 2, write = 5, reset window = 5 min (DEFAULT_CIRCUIT_BREAKER_* constants). No CosmosClientOptions toggle or doc-published API; marked preview as the capability is not opt-in/opt-out configurable. Introduced alongside GEM/LocationCache in 0.30.0." }
+          rust: { status: "preview", tier: "ga_blocker", since: "0.30.0", notes: "Partition-level circuit breaker is implemented and hard-enabled by the builder in clients/cosmos_client_builder.rs via GlobalPartitionEndpointManager::new(gem, false, true). Defaults in routing/global_partition_endpoint_manager.rs: consecutive read-failure threshold = 2, write = 5, reset window = 5 min (DEFAULT_CIRCUIT_BREAKER_* constants). No CosmosClientOptions toggle or doc-published API; marked preview as the capability is not opt-in/opt-out configurable. Introduced alongside GEM/LocationCache in 0.30.0." }
 
       - id: n_region_sync_commit
         name: "N-Region Synchronous Commit"
@@ -384,8 +384,8 @@ categories:
           java: { status: "ga", since: "4.79.0", notes: "Added in 4.79.0 (PR #47757)." }
           python: { status: "not_started" }
           go: { status: "not_started" }
-          rust: { status: "not_started", notes: "No N-region synchronous commit / IServiceConfigurationReader-equivalent in sdk/cosmos/azure_data_cosmos source as of 0.31.0." }
-
+          rust: { status: "not_started", tier: "post_ga", notes: "Not planned for GA" }
+          
       - id: excluded_regions
         name: "Excluded Regions"
         description: "Exclude specific regions from routing at client or request level"
@@ -394,7 +394,7 @@ categories:
           java: { status: "ga", since: "4.51.0", notes: "CosmosClientBuilder#excludedRegionSupplier and CosmosExcludedRegions added in 4.51.0 (PR #36616)." }
           python: { status: "ga", since: "4.12.0" }
           go: { status: "not_started" }
-          rust: { status: "ga", since: "0.31.0", notes: "Per-request only: ItemOptions::with_excluded_regions (options/mod.rs, added in 0.31.0 via #3602) is routed through CosmosRequest.excluded_regions into LocationCache::get_applicable_endpoints. Client-level excluded_regions on CosmosClientOptions was removed in 0.31.0 (#3744); only application_region, user_agent_suffix, and custom_headers remain on that struct." }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.31.0", notes: "Per-request only: ItemOptions::with_excluded_regions (options/mod.rs, added in 0.31.0 via #3602) is routed through CosmosRequest.excluded_regions into LocationCache::get_applicable_endpoints. Client-level excluded_regions on CosmosClientOptions was removed in 0.31.0 (#3744); only application_region, user_agent_suffix, and custom_headers remain on that struct." }
 
   - name: "Change Feed"
     features:
@@ -414,7 +414,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.0.0" }
           go: { status: "preview", since: "1.5.0-beta.1" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "ga_blocker" }
 
       - id: change_feed_processor
         name: "Change Feed Processor"
@@ -437,7 +437,7 @@ categories:
           java: { status: "ga", since: "4.15.0" }
           python: { status: "ga", since: "4.14.0b2" }
           go: { status: "preview", since: "1.5.0-beta.1" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "ga_blocker" }
 
   - name: "Advanced Features"
     features:
@@ -449,7 +449,7 @@ categories:
           java: { status: "ga", since: "4.46.0" }
           python: { status: "ga", since: "4.6.0" }
           go: { status: "ga", since: "1.2.0" }
-          rust: { status: "ga", since: "0.22.0", notes: "Multi-level tuples up to 3 levels; MultiHash partition keys" }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.22.0", notes: "Multi-level tuples up to 3 levels; MultiHash partition keys" }
 
       - id: throughput_control
         name: "Throughput Control"
@@ -459,7 +459,7 @@ categories:
           java: { status: "ga", since: "4.30.0" }
           python: { status: "not_started" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "post_ga", notes: "Not planned for GA" }
 
       - id: throughput_buckets
         name: "Throughput Buckets"
@@ -469,7 +469,7 @@ categories:
           java: { status: "ga", since: "4.74.0" }
           python: { status: "ga", since: "4.14.0", notes: "throughput_bucket parameter on operations" }
           go: { status: "not_started" }
-          rust: { status: "ga", since: "0.30.0", notes: "throughput_bucket in request options" }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.30.0", notes: "throughput_bucket in request options" }
 
       - id: priority_throttling
         name: "Priority-Based Throttling"
@@ -479,7 +479,7 @@ categories:
           java: { status: "ga", since: "4.45.0", notes: "Priority-based throttling added in 4.45.0 (PR #34121)." }
           python: { status: "ga", since: "4.14.2" }
           go: { status: "not_started" }
-          rust: { status: "ga", since: "0.30.0", notes: "PriorityLevel enum: High/Low" }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.30.0", notes: "PriorityLevel enum: High/Low" }
 
       - id: integrated_cache
         name: "Integrated Cache Support"
@@ -489,7 +489,7 @@ categories:
           java: { status: "ga", since: "4.49.0", notes: "Dedicated-gateway integrated-cache support landed in 4.49.0." }
           python: { status: "ga", since: "4.5.0" }
           go: { status: "ga", since: "1.1.0" }
-          rust: { status: "not_started", notes: "DedicatedGatewayOptions not found in azure_data_cosmos CHANGELOG through 0.31.0." }
+          rust: { status: "not_started", tier: "ga_blocker", notes: "DedicatedGatewayOptions not found in azure_data_cosmos CHANGELOG through 0.31.0." }
 
   - name: "Observability"
     features:
@@ -501,7 +501,7 @@ categories:
           java: { status: "ga", since: "4.43.0", notes: "OpenTelemetry work begins in 4.43.0 (PR #34999)." }
           python: { status: "ga", since: "4.12.0" }
           go: { status: "ga", since: "1.1.0" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "ga_blocker" }
 
       - id: diagnostics
         name: "Diagnostics / Structured Logging"
@@ -511,7 +511,7 @@ categories:
           java: { status: "ga", since: "4.0.0" }
           python: { status: "ga", since: "4.12.0" }
           go: { status: "ga", since: "1.0.0" }
-          rust: { status: "ga", since: "0.29.0", notes: "Uses Rust tracing crate; structured logging and diagnostics thresholds" }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.29.0", notes: "Uses Rust tracing crate; structured logging and diagnostics thresholds" }
 
   - name: "Preview / Emerging"
     features:
@@ -523,7 +523,7 @@ categories:
           java: { status: "preview", since: "4.66.1", requires_opt_in: "system_property", opt_in_name: "azure.cosmos.thinClientEnabled", public_api: false, notes: "Internal-only thin client mode enabled via system property in 4.66.1 (PR #43937)." }
           python: { status: "not_started" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "ga_blocker" }
 
       - id: fault_injection
         name: "Fault Injection"
@@ -549,7 +549,7 @@ categories:
           java: { status: "ga", requires_opt_in: "separate_package", opt_in_name: "azure-cosmos-test", since: "4.42.0", notes: "Fault injection support added in 4.42.0 (PR #33329)." }
           python: { status: "preview", public_api: false, notes: "FaultInjectionTransport test utility; not yet public API" }
           go: { status: "not_started" }
-          rust: { status: "ga", since: "0.31.0", notes: "Opt-in via the `fault_injection` Cargo feature flag to avoid compiling testing utilities into production; API is stable and supported (not a preview API). Follow-up branch ft/status-taxonomy will express this as requires_opt_in: cargo_feature." }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.31.0", notes: "Opt-in via the `fault_injection` Cargo feature flag to avoid compiling testing utilities into production; API is stable and supported (not a preview API). Follow-up branch ft/status-taxonomy will express this as requires_opt_in: cargo_feature." }
 
       - id: read_consistency_strategy
         name: "Read Consistency Strategy"
@@ -559,7 +559,7 @@ categories:
           java: { status: "ga", since: "4.71.0" }
           python: { status: "not_started" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "ga", tier: "ga_blocker", since: "0.32.0" }
 
       - id: write_retries
         name: "Automatic Write Retries"
@@ -569,4 +569,4 @@ categories:
           java: { status: "ga", since: "4.30.0" }
           python: { status: "ga", since: "4.14.0b1", notes: "retry_write parameter on write operations" }
           go: { status: "not_started" }
-          rust: { status: "not_started" }
+          rust: { status: "not_started", tier: "ga_blocker" }
